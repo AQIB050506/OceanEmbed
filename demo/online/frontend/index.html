@@ -46,6 +46,14 @@
         .flow-step { display:flex; align-items:center; gap:8px; padding:4px 0; font-size:11px; color:#7eb8da; }
         .flow-num { width:18px; height:18px; border-radius:50%; background:#1a3a5c; color:#4fc3f7; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; flex-shrink:0; }
         .flow-arrow { color:#4fc3f7; font-size:12px; text-align:center; padding-left:4px; }
+        .overlay-bar { position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:900; display:flex; gap:4px; background:rgba(13,31,60,0.92); border:1px solid #1e3a5f; border-radius:8px; padding:5px; }
+        .overlay-btn { background:transparent; border:1px solid transparent; color:#7eb8da; padding:5px 12px; border-radius:5px; cursor:pointer; font-size:11px; font-weight:600; }
+        .overlay-btn:hover { color:#e0e8f0; }
+        .overlay-btn.active { background:#1a3a5c; border-color:#4fc3f7; color:#4fc3f7; }
+        .depth-select { background:#0a1628; border:1px solid #2a5a8c; color:#e0e8f0; padding:4px 8px; border-radius:5px; font-size:11px; margin-left:4px; }
+        #overlayLegend { position:absolute; bottom:24px; right:10px; z-index:900; background:rgba(13,31,60,0.92); border:1px solid #1e3a5f; border-radius:6px; padding:8px 10px; font-size:10px; color:#7eb8da; display:none; }
+        #overlayLegend .bar { width:140px; height:12px; border-radius:3px; margin:5px 0; background:linear-gradient(90deg,#0d47a1,#1976d2,#42a5f5,#ffee58,#ff9800,#f44336); }
+        #overlayLegend .range { display:flex; justify-content:space-between; }
     </style>
 </head>
 <body>
@@ -63,6 +71,25 @@
     <div class="main">
         <div class="map-panel">
             <div id="map"></div>
+            <div class="overlay-bar" id="overlayBar" style="display:none;">
+                <button class="overlay-btn active" data-layer="none" onclick="setOverlay('none')">None</button>
+                <button class="overlay-btn" data-layer="sst" onclick="setOverlay('sst')">Input SST</button>
+                <button class="overlay-btn" data-layer="pred" onclick="setOverlay('pred')">Predicted T
+                    <select class="depth-select" id="depthSelect" onclick="event.stopPropagation()" onchange="setOverlay('pred')">
+                        <option value="0">0m</option>
+                        <option value="5">5m</option>
+                        <option value="7">75m</option>
+                        <option value="8">100m</option>
+                        <option value="10">200m</option>
+                        <option value="14">450m</option>
+                    </select>
+                </button>
+            </div>
+            <div id="overlayLegend">
+                <div id="legendTitle">Temperature (°C)</div>
+                <div class="bar"></div>
+                <div class="range"><span id="legMin">--</span><span id="legMax">--</span></div>
+            </div>
             <div class="loading" id="loadingOverlay" style="display:none;">
                 <div class="spinner"></div>
                 <div style="font-size:13px;color:#7eb8da;" id="loadingText">Fetching real-time ocean data...</div>
@@ -93,7 +120,7 @@
             </div>
             <div class="card">
                 <h3>How It Works</h3>
-                <div class="flow-step"><div class="flow-num">1</div><span>Real-time SST, wind from Open-Meteo API</span></div>
+                <div class="flow-step"><div class="flow-num">1</div><span>Real-time SST, SSH, wind from Open-Meteo API</span></div>
                 <div class="flow-arrow">|</div>
                 <div class="flow-step"><div class="flow-num">2</div><span>Attention-Enhanced 3D U-Net++ inference</span></div>
                 <div class="flow-arrow">|</div>
@@ -106,13 +133,18 @@
                 <div class="grid2">
                     <div class="cell"><div class="lbl">Argo RMSE</div><div class="val">1.02 <span class="unit">C</span></div></div>
                     <div class="cell"><div class="lbl">Argo Corr</div><div class="val">0.83</div></div>
+                    <div class="cell"><div class="lbl">vs Baseline</div><div class="val">43×</div></div>
+                    <div class="cell"><div class="lbl">GLORYS R²</div><div class="val">0.989</div></div>
                 </div>
             </div>
         </div>
     </div>
     <script>
         let map, profileChart, currentPreds = null;
+        let sstGrid = null, predGrids = {}, overlayLayer = null, activeOverlay = 'none';
         const API = '';
+        const DEPTHS = [0,5,10,20,30,50,75,100,125,150,200,250,300,400,450];
+        const DOMAIN = { latMin:0, latMax:25, lonMin:45, lonMax:100 };
 
         function initMap() {
             map = L.map('map', { center:[14,76], zoom:5, minZoom:4, maxZoom:10 });
@@ -130,6 +162,78 @@
             const {lat, lng} = e.latlng;
             document.getElementById('locInfo').textContent = lat.toFixed(2) + 'N, ' + lng.toFixed(2) + 'E';
             fetchProfile(lat, lng);
+        }
+
+        function colorScale(v, min, max) {
+            const t = Math.max(0, Math.min(1, (v - min) / (max - min + 1e-9)));
+            // blue -> cyan -> yellow -> orange -> red
+            const stops = [
+                [13,71,161],[25,118,210],[66,165,245],[255,238,88],[255,152,0],[244,67,54]
+            ];
+            const idx = t * (stops.length - 1);
+            const i = Math.min(Math.floor(idx), stops.length - 2);
+            const f = idx - i;
+            const c0 = stops[i], c1 = stops[i+1];
+            return [
+                Math.round(c0[0] + (c1[0]-c0[0])*f),
+                Math.round(c0[1] + (c1[1]-c0[1])*f),
+                Math.round(c0[2] + (c1[2]-c0[2])*f),
+            ];
+        }
+
+        function renderGrid(grid, title) {
+            const rows = grid.length, cols = grid[0].length;
+            let min = Infinity, max = -Infinity;
+            for (let i=0;i<rows;i++) for (let j=0;j<cols;j++) {
+                const v = grid[i][j];
+                if (v < min) min = v;
+                if (v > max) max = v;
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = cols; canvas.height = rows;
+            const ctx = canvas.getContext('2d');
+            const img = ctx.createImageData(cols, rows);
+            for (let i=0;i<rows;i++) for (let j=0;j<cols;j++) {
+                const [r,g,b] = colorScale(grid[i][j], min, max);
+                const k = (i*cols+j)*4;
+                img.data[k]=r; img.data[k+1]=g; img.data[k+2]=b; img.data[k+3]=200;
+            }
+            ctx.putImageData(img, 0, 0);
+            const bounds = [[DOMAIN.latMin, DOMAIN.lonMin],[DOMAIN.latMax, DOMAIN.lonMax]];
+            if (overlayLayer) map.removeLayer(overlayLayer);
+            overlayLayer = L.imageOverlay(canvas.toDataURL(), bounds, {opacity:0.65}).addTo(map);
+            document.getElementById('overlayLegend').style.display = 'block';
+            document.getElementById('legendTitle').textContent = title;
+            document.getElementById('legMin').textContent = min.toFixed(1);
+            document.getElementById('legMax').textContent = max.toFixed(1);
+        }
+
+        function setOverlay(type) {
+            activeOverlay = type;
+            document.querySelectorAll('.overlay-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.layer === type);
+            });
+            if (type === 'none') {
+                if (overlayLayer) { map.removeLayer(overlayLayer); overlayLayer = null; }
+                document.getElementById('overlayLegend').style.display = 'none';
+            } else if (type === 'sst') {
+                if (sstGrid) renderGrid(sstGrid, 'Input SST (°C)');
+            } else if (type === 'pred') {
+                const di = parseInt(document.getElementById('depthSelect').value);
+                const key = 'd' + di;
+                if (predGrids[key]) renderGrid(predGrids[key], 'Predicted T @ ' + DEPTHS[di] + 'm (°C)');
+                else fetchPredMap(di);
+            }
+        }
+
+        async function fetchPredMap(di) {
+            try {
+                const r = await fetch(API + '/api/pred_map?depth_idx=' + di);
+                const d = await r.json();
+                if (d.error) return;
+                predGrids['d'+di] = d.temperature;
+                if (activeOverlay === 'pred') renderGrid(d.temperature, 'Predicted T @ ' + d.depth + 'm (°C)');
+            } catch(e) { console.error(e); }
         }
 
         async function fetchRealtime() {
@@ -153,9 +257,20 @@
                     ' | SST mean: ' + data.sst_mean + ' C' +
                     (data.inference_time_s ? ' | Inference: ' + data.inference_time_s + 's' : '');
 
-                if (!data.from_cache) {
-                    document.getElementById('loadingText').textContent = 'Running model inference on GPU...';
-                }
+                document.getElementById('loadingText').textContent = 'Loading spatial maps...';
+                predGrids = {};
+                const [sstR, predR] = await Promise.all([
+                    fetch(API + '/api/sst_map'),
+                    fetch(API + '/api/pred_map?depth_idx=0'),
+                ]);
+                const sstD = await sstR.json();
+                const predD = await predR.json();
+                if (!sstD.error) sstGrid = sstD.sst;
+                if (!predD.error) predGrids['d0'] = predD.temperature;
+
+                document.getElementById('overlayBar').style.display = 'flex';
+                if (activeOverlay === 'sst' && sstGrid) renderGrid(sstGrid, 'Input SST (°C)');
+                else if (activeOverlay === 'pred' && predGrids['d0']) renderGrid(predGrids['d0'], 'Predicted T @ 0m (°C)');
             } catch(e) {
                 document.getElementById('lastUpdate').textContent = 'Error: ' + e.message;
             } finally {

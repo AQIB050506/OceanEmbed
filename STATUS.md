@@ -68,10 +68,16 @@
   - `python run.py demo` — full FastAPI (live inference + precomputed)
   - `python demo/serve_offline.py` — static fallback (precomputed only, no Python deps needed)
 
-### 2.9 Online Demo (demo/online/) — BUILT
-- [x] Realtime fetcher (Open-Meteo Marine + Weather APIs)
-- [x] Server with live GPU inference on fetched data
-- [x] Separate frontend with fetch-and-predict flow
+### 2.9 Online Demo (demo/online/) — BUILT & VERIFIED (24 Sep 2026)
+- [x] Realtime fetcher — Open-Meteo Marine (SST+SSH) + Weather (wind), parallel ThreadPool (12 workers, ~12s)
+- [x] Correct model input shape `(5, 5, 101, 221)` + training normalization stats (SST Kelvin conversion)
+- [x] Real SSH from API (not random) — fixed 30.8% flat-profile collapse → 0.3%
+- [x] Smooth climatological SSS (Arabian Sea salty / Bay of Bengal fresh)
+- [x] Flat-profile climatology fallback in `/api/profile` (belt-and-suspenders)
+- [x] Server: `/api/realtime`, `/api/profile`, `/api/sst_map`, `/api/pred_map?depth_idx=N`
+- [x] Frontend: map overlays (None / Input SST / Predicted T @ depth selector), color legend, profile chart, indicators, validation stats card
+- [x] E2E verified: inference 0.49s, realistic profile (28.4→11.9°C), all endpoints 200
+- [x] Start: `python demo/online/start.py` or `python demo/online/server.py`
 
 ### 2.10 Tests & Documentation
 - [x] 5 pytest tests passing (forward, backward, loss, spatial sizes, app products)
@@ -152,12 +158,17 @@ python demo/serve_offline.py  # Static mode — test degradation
 # Disconnect internet, reload — verify grid fallback
 ```
 
-### Step 4: Regenerate demo data with ARGO
+### Step 4: ~~Regenerate demo data with ARGO~~ DONE
 ```bash
-python demo/precompute_demo.py   # Now includes ARGO profiles + anomaly maps
+python demo/precompute_demo.py   # 34 ARGO comparisons + anomaly maps
 ```
 
-### Step 5: (Optional) Thermocline improvement
+### Step 5: ~~Online demo~~ DONE — see §2.9
+```bash
+python demo/online/start.py   # port 8000
+```
+
+### Step 6: (Optional) Thermocline improvement
 ```bash
 python train_full.py   # Resumes from checkpoint
 ```

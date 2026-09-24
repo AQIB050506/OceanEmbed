@@ -140,6 +140,17 @@ Per `rules.md` §3: every architecture/hyperparameter/metrics run gets logged he
 
 ---
 
+## Experiment 7 — Online Demo Real-Time Pipeline
+**Date:** 2026-09-24
+**Script:** `demo/online/realtime_fetcher.py`, `demo/online/server.py`
+**Config:** Open-Meteo Marine (SST+SSH) + Weather (wind), 66-point sparse grid, 12-thread parallel fetch, cubic interpolation to 101×221; model input (5,5,101,221) with training norm stats (Kelvin SST)
+**Result:** Fetch ~12s, GPU inference 0.49s, flat-profile cells 30.8%→0.3% after switching SSH from random to API-sourced; all endpoints verified 200; realistic profiles (e.g. Arabian Sea 28.4→11.9°C)
+
+**Artifacts:** `demo/online/frontend/index.html` (overlays + legend), server endpoints `/api/realtime`, `/api/profile`, `/api/sst_map`, `/api/pred_map`
+**Result:** PASS
+
+---
+
 ## Planned / Not Yet Run
 
 | Experiment | Status | Notes |

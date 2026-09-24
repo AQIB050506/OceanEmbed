@@ -61,6 +61,26 @@ def latlon_to_grid(lat, lon):
     return max(0, min(lat_idx, 100)), max(0, min(lon_idx, 220))
 
 
+def climatological_profile(sst, depths):
+    """Mixed-layer + thermocline fallback for flat/unrealistic model outputs."""
+    depths = np.array(depths, dtype=np.float32)
+    t_deep = 4.0
+    mld = 30.0
+    scale = 80.0
+    profile = t_deep + (sst - t_deep) * np.exp(-np.maximum(depths - mld, 0) / scale)
+    profile[depths <= mld] = sst
+    return profile
+
+
+def is_flat_profile(temps):
+    temps = np.asarray(temps)
+    grads = np.diff(temps)
+    sign_changes = np.sum(np.abs(np.diff(np.sign(grads))) > 1)
+    noisy = sign_changes > 3
+    unrealistic = np.std(temps) < 1.0 or (temps[0] > 25.0 and temps[-1] > 15.0)
+    return unrealistic or noisy
+
+
 def create_app():
     from fastapi import FastAPI
     from fastapi.staticfiles import StaticFiles
@@ -118,8 +138,14 @@ def create_app():
             return {"error": "No predictions. Call /api/realtime first."}
         lat_idx, lon_idx = latlon_to_grid(query.latitude, query.longitude)
         temps = cache["preds"][:, lat_idx, lon_idx].tolist()
+        source = "model"
 
-        point_temp = cache["preds"][:, lat_idx, lon_idx]
+        # Fallback if model output is flat/noisy at this point
+        if is_flat_profile(temps):
+            temps = climatological_profile(temps[0], DEPTH_LEVELS).tolist()
+            source = "climatology_fallback"
+
+        point_temp = np.array(temps)
         ohc = compute_ocean_heat_content(
             point_temp[np.newaxis, np.newaxis, :], DEPTH_LEVELS, (0, 200)
         )
@@ -134,7 +160,7 @@ def create_app():
                 thermo_idx = i
 
         mhw = detect_marine_heatwave(
-            cache["preds"][:, :, :], DEPTH_LEVELS
+            cache["preds"], DEPTH_LEVELS
         )
 
         ohc_full = compute_ocean_heat_content(
@@ -147,6 +173,7 @@ def create_app():
             "longitude": query.longitude,
             "depths": DEPTH_LEVELS,
             "temperature": [round(t, 2) for t in temps],
+            "source": source,
             "sst": round(temps[0], 2),
             "ohc_kj_cm2": round(ohc_kj, 1),
             "thermocline_depth_m": DEPTH_LEVELS[thermo_idx],
