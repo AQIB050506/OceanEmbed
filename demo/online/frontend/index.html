@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OceanEmbed — 3D Real-Time Subsurface Prediction</title>
     <link rel="stylesheet" href="vendor/leaflet/leaflet.css"/>
+    <script src="vendor/leaflet/leaflet.js"></script>
     <script src="vendor/chartjs/chart.js"></script>
     <script type="importmap">
     {
@@ -81,6 +82,15 @@
         .loading .sub { font-size:10px; color:#4a7ba0; margin-top:5px; }
 
         .loc-tag { position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:20; background:rgba(8,20,38,0.9); border:1px solid #4fc3f7; border-radius:8px; padding:5px 14px; font-size:11px; color:#4fc3f7; display:none; font-weight:600; }
+
+        /* minimap */
+        .minimap { position:absolute; bottom:18px; left:14px; z-index:25; width:238px; background:rgba(8,20,38,0.92); border:1px solid #1e3a5f; border-radius:10px; padding:8px; backdrop-filter:blur(8px); }
+        .minimap .mtitle { font-size:9px; color:#6fa8cc; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center; }
+        .minimap .mtitle .dot { width:6px; height:6px; background:#4fc3f7; }
+        #minimap { width:100%; height:172px; border-radius:6px; background:#0a1628; border:1px solid #16345c; cursor:crosshair; }
+        #minimap .leaflet-container { background:#071426; font-family:inherit; }
+        .minimap .mfoot { font-size:8.5px; color:#4a7ba0; text-align:center; margin-top:5px; }
+        .loc-tag.land { border-color:#ff9800; color:#ff9800; }
     </style>
 </head>
 <body>
@@ -117,7 +127,13 @@
             </div>
 
             <div class="loc-tag" id="locTag"></div>
-            <div class="hint" id="hint">Drag to rotate · Scroll to zoom · Click ocean to inspect a profile</div>
+            <div class="hint" id="hint">Drag to rotate · Scroll to zoom · Click ocean or minimap to inspect</div>
+
+            <div class="minimap" id="minimapWrap">
+                <div class="mtitle"><span>Location Map · North Indian Ocean</span><div class="dot"></div></div>
+                <div id="minimap"></div>
+                <div class="mfoot">Click map or 3D view to select · © Esri</div>
+            </div>
 
             <div class="loading" id="loadingOverlay">
                 <div class="spinner"></div>
@@ -190,6 +206,7 @@ const SCENE_H = 16;   // y extent (depth)
 // ---------- state ----------
 let renderer, scene, camera, controls, raycaster, pointer;
 let surfaceMesh = null, depthPlanes = [], boxGroup = null, marker = null;
+let labelGroup = null, miniMap = null, miniMarker = null, miniDomain = null;
 let volumeData = null;
 let currentDepthIdx = 0, targetDepthIdx = 0;
 let profileChart = null;
@@ -209,21 +226,157 @@ function tempColor(v, min, max) {
     return [a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f, a[2]+(b[2]-a[2])*f];
 }
 
-function buildTexture(grid, gridH, gridW, min, max) {
+function buildTexture(grid, gridH, gridW, min, max, opts = {}) {
+    const { land = null, graticule = false } = opts;
+    // render at 4x grid res for crisp coastlines + graticule
+    const SS = gridW >= 96 ? 4 : 6;
+    const W = gridW * SS, H = gridH * SS;
     const canvas = document.createElement('canvas');
-    canvas.width = gridW; canvas.height = gridH;
+    canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
+
+    // 1) temperature cells (nearest-neighbor upscale)
     const img = ctx.createImageData(gridW, gridH);
     for (let i = 0; i < gridH * gridW; i++) {
         const v = grid[i];
         const [r, g, b] = (v === null || isNaN(v)) ? [10, 22, 40] : tempColor(v, min, max);
         img.data[i*4] = r; img.data[i*4+1] = g; img.data[i*4+2] = b; img.data[i*4+3] = 255;
     }
-    ctx.putImageData(img, 0, 0);
+    const off = document.createElement('canvas');
+    off.width = gridW; off.height = gridH;
+    off.getContext('2d').putImageData(img, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(off, 0, 0, W, H);
+    ctx.imageSmoothingEnabled = true;
+
+    // 2) land mask (opaque earth) + coastline highlight, drawn at full land res
+    if (land && opts.landW && opts.landH) {
+        const { landW: nLon, landH: nLat } = opts;
+        const cw = W / nLon, ch = H / nLat;
+        for (let li = 0; li < nLat; li++) {
+            for (let lj = 0; lj < nLon; lj++) {
+                if (!land[li * nLon + lj]) continue;
+                const nb = [[li-1,lj],[li+1,lj],[li,lj-1],[li,lj+1]];
+                const isCoast = nb.some(([a,b]) => a<0||b<0||a>=nLat||b>=nLon||!land[a*nLon+b]);
+                ctx.fillStyle = isCoast ? '#5a7a4a' : '#274028';
+                ctx.fillRect(Math.floor(lj*cw), Math.floor(li*ch), Math.ceil(cw)+1, Math.ceil(ch)+1);
+            }
+        }
+    }
+
+    // 3) graticule lines every 5° (canvas row 0 = 0°N → y grows with lat)
+    if (graticule) {
+        ctx.strokeStyle = 'rgba(200,230,255,0.30)';
+        ctx.lineWidth = 1;
+        for (let lat = 5; lat < 25; lat += 5) {
+            const y = Math.round(H * lat / 25) + 0.5;
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+        }
+        for (let lon = 50; lon < 100; lon += 5) {
+            const x = Math.round(W * (lon - 45) / 55) + 0.5;
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+        }
+        // border
+        ctx.strokeStyle = 'rgba(200,230,255,0.55)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(1, 1, W - 2, H - 2);
+        // coordinate tick labels (lon labels along 0°N edge, lat labels along 100°E edge)
+        ctx.fillStyle = 'rgba(225,242,255,0.95)';
+        ctx.font = 'bold ' + Math.round(SS * 4.2) + 'px Segoe UI, sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        for (let lon = 50; lon <= 95; lon += 10) {
+            const x = W * (lon - 45) / 55;
+            ctx.fillText(lon + '°E', x, SS * 7.5);
+        }
+        ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+        for (let lat = 5; lat <= 20; lat += 5) {
+            const y = H * lat / 25;
+            ctx.fillText(lat + '°N', W - SS * 2.5, y);
+        }
+    }
+
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.minFilter = THREE.LinearFilter;
     tex.magFilter = THREE.LinearFilter;
+    return tex;
+}
+
+function makeBlackTexture() {
+    const c = document.createElement('canvas');
+    c.width = 2; c.height = 2;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 2, 2);
+    return new THREE.CanvasTexture(c);
+}
+
+// ---------- region labels (billboard sprites) ----------
+const REGIONS = [
+    { t: 'INDIA',        lat: 20.5, lon: 78.0, land: true  },
+    { t: 'PAKISTAN',     lat: 24.3, lon: 67.0, land: true  },
+    { t: 'OMAN',         lat: 19.5, lon: 57.0, land: true  },
+    { t: 'SOMALIA',      lat: 4.0,  lon: 47.5, land: true  },
+    { t: 'MYANMAR',      lat: 20.0, lon: 96.0, land: true  },
+    { t: 'SRI LANKA',    lat: 7.9,  lon: 80.7, land: true  },
+    { t: 'MALDIVES',     lat: 3.5,  lon: 73.2, land: true  },
+    { t: 'ARABIAN SEA',  lat: 14.0, lon: 64.0, land: false },
+    { t: 'BAY OF BENGAL',lat: 13.0, lon: 88.0, land: false },
+    { t: 'ANDAMAN SEA',  lat: 11.0, lon: 94.0, land: false },
+    { t: 'INDIAN OCEAN', lat: 3.0,  lon: 78.0, land: false },
+];
+
+function makeLabelSprite(text, { color = '#e8f4fd', glow = 'rgba(79,195,247,0.95)', size = 46, h = 2.6 } = {}) {
+    const cnv = document.createElement('canvas');
+    const ctx = cnv.getContext('2d');
+    ctx.font = 'bold ' + size + 'px Segoe UI, sans-serif';
+    const tw = Math.ceil(ctx.measureText(text).width);
+    cnv.width = tw + 36; cnv.height = size + 24;
+    const c2 = cnv.getContext('2d');
+    c2.font = 'bold ' + size + 'px Segoe UI, sans-serif';
+    c2.textAlign = 'center'; c2.textBaseline = 'middle';
+    c2.shadowColor = glow; c2.shadowBlur = 14;
+    c2.fillStyle = color;
+    c2.fillText(text, cnv.width / 2, cnv.height / 2);
+    c2.fillText(text, cnv.width / 2, cnv.height / 2);
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: new THREE.CanvasTexture(cnv), transparent: true, depthWrite: false, depthTest: false,
+    }));
+    spr.scale.set(h * cnv.width / cnv.height, h, 1);
+    spr.renderOrder = 60;
+    return spr;
+}
+
+function buildLabels() {
+    if (labelGroup) {
+        labelGroup.children.forEach(s => { s.material.map.dispose(); s.material.dispose(); });
+        scene.remove(labelGroup);
+    }
+    labelGroup = new THREE.Group();
+    REGIONS.forEach(r => {
+        const spr = makeLabelSprite(r.t, r.land
+            ? { color: '#f0e6c8', glow: 'rgba(255,220,120,0.85)', size: 46, h: 2.4 }
+            : { color: '#cfeaff', glow: 'rgba(79,195,247,0.95)', size: 46, h: 2.8 });
+        const p = latLonToScene(r.lat, r.lon);
+        spr.position.set(p.x, 2.4, p.z);
+        labelGroup.add(spr);
+    });
+    scene.add(labelGroup);
+}
+
+// wave-suppression mask: red channel = land (keep surface flat over land)
+function buildMaskTexture(vol) {
+    if (!vol.land || !vol.land_w) return null;
+    const c = document.createElement('canvas');
+    c.width = vol.land_w; c.height = vol.land_h;
+    const ctx = c.getContext('2d');
+    const img = ctx.createImageData(vol.land_w, vol.land_h);
+    for (let i = 0; i < vol.land.length; i++) {
+        const v = vol.land[i] ? 255 : 0;
+        img.data[i*4] = v; img.data[i*4+1] = v; img.data[i*4+2] = v; img.data[i*4+3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    const tex = new THREE.CanvasTexture(c);
+    tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter;
     return tex;
 }
 
@@ -308,12 +461,20 @@ function onResize() {
 // ---------- build ocean volume ----------
 function buildOcean(vol) {
     // dispose old
-    if (surfaceMesh) { scene.remove(surfaceMesh); surfaceMesh.geometry.dispose(); surfaceMesh.material.dispose(); }
-    depthPlanes.forEach(p => { scene.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh.material.dispose(); });
+    if (surfaceMesh) {
+        scene.remove(surfaceMesh);
+        surfaceMesh.geometry.dispose();
+        const u = surfaceMesh.material.uniforms;
+        if (u.uTex) u.uTex.value.dispose();
+        if (u.uMask) u.uMask.value.dispose();
+        surfaceMesh.material.dispose();
+    }
+    depthPlanes.forEach(p => { scene.remove(p.mesh); p.mesh.geometry.dispose(); if (p.mesh.material.map) p.mesh.material.map.dispose(); p.mesh.material.dispose(); });
     depthPlanes = [];
     if (marker) { scene.remove(marker); marker = null; }
 
     const { layers, sst, grid_h: gh, grid_w: gw, stride } = vol;
+    const landOpts = { land: vol.land || null, landW: vol.land_w, landH: vol.land_h };
     let min = Infinity, max = -Infinity;
     layers.forEach(L => L.forEach(v => { if (v < min) min = v; if (v > max) max = v; }));
     if (min === Infinity) { min = 5; max = 32; }
@@ -323,18 +484,23 @@ function buildOcean(vol) {
     // depth → y
     const depthToY = d => -(d / 450) * SCENE_H;
 
-    // surface (animated shader, SST texture)
-    const sstTex = sst ? buildTexture(sst, gh, gw, sMin, sMax) : buildTexture(layers[0], gh, gw, min, max);
+    // surface (animated shader, SST + land + graticule texture)
+    const sstTex = sst
+        ? buildTexture(sst, gh, gw, sMin, sMax, { ...landOpts, graticule: true })
+        : buildTexture(layers[0], gh, gw, min, max, { ...landOpts, graticule: true });
+    const maskTex = buildMaskTexture(vol) || makeBlackTexture();
     const surfGeo = new THREE.PlaneGeometry(SCENE_W, SCENE_D, 64, 32);
     surfGeo.rotateX(-Math.PI / 2);
     const surfMat = new THREE.ShaderMaterial({
         uniforms: {
             uTex: { value: sstTex },
+            uMask: { value: maskTex },
             uTime: { value: 0 },
             uOpacity: { value: 0.92 },
         },
         vertexShader: `
             uniform float uTime;
+            uniform sampler2D uMask;
             varying vec2 vUv;
             varying float vH;
             void main() {
@@ -343,8 +509,9 @@ function buildOcean(vol) {
                 float w = sin(p.x * 0.22 + uTime * 1.1) * 0.45
                         + cos(p.z * 0.3 + uTime * 0.8) * 0.35
                         + sin((p.x + p.z) * 0.15 + uTime * 0.6) * 0.25;
-                p.y += w;
-                vH = w;
+                float land = texture2D(uMask, uv).r;   // 1 over land → flat
+                p.y += w * (1.0 - land);
+                vH = w * (1.0 - land);
                 gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
             }
         `,
@@ -370,9 +537,9 @@ function buildOcean(vol) {
     surfaceMesh.name = 'surface';
     scene.add(surfaceMesh);
 
-    // 15 depth planes
+    // 15 depth planes (land-masked too, no graticule)
     DEPTHS.forEach((depth, di) => {
-        const tex = buildTexture(layers[di], gh, gw, min, max);
+        const tex = buildTexture(layers[di], gh, gw, min, max, landOpts);
         const geo = new THREE.PlaneGeometry(SCENE_W, SCENE_D, 1, 1);
         geo.rotateX(-Math.PI / 2);
         const mat = new THREE.MeshBasicMaterial({
@@ -388,6 +555,9 @@ function buildOcean(vol) {
         scene.add(mesh);
         depthPlanes.push({ mesh, depth, di, targetOpacity: di === 0 ? 0 : 0.14 });
     });
+
+    // geographic labels
+    buildLabels();
 
     volumeData = vol;
     applyDepthSlice(true);
@@ -440,6 +610,28 @@ function placeMarker(lat, lon, animatePop = true) {
     } else {
         marker.userData.pop = 1;
     }
+    // sync minimap marker
+    if (miniMarker) miniMarker.setLatLng([lat, lon]);
+}
+
+// unified point selection: 3D click, minimap click, default point
+function selectPoint(lat, lon, { userPicked = true, suffix = '' } = {}) {
+    if (userPicked) window.__userClicked = true;
+    placeMarker(lat, lon);
+    const coord = lat.toFixed(2) + '°N, ' + lon.toFixed(2) + '°E';
+    const tag = document.getElementById('locTag');
+    tag.textContent = coord + suffix;
+    tag.className = 'loc-tag' + (isLandPoint(lat, lon) ? ' land' : '');
+    tag.style.display = 'block';
+    document.getElementById('locInfo').textContent = coord + suffix;
+    fetchProfile(lat, lon);
+}
+
+function isLandPoint(lat, lon) {
+    if (!volumeData || !volumeData.land) return false;
+    const li = Math.min(volumeData.land_h - 1, Math.max(0, Math.floor((lat - BOUNDS.latMin) / LAT_SPAN * volumeData.land_h)));
+    const lj = Math.min(volumeData.land_w - 1, Math.max(0, Math.floor((lon - BOUNDS.lonMin) / LON_SPAN * volumeData.land_w)));
+    return !!volumeData.land[li * volumeData.land_w + lj];
 }
 
 // ---------- click → profile ----------
@@ -455,20 +647,55 @@ function onSceneClick(event) {
     if (!hits.length) return;
     const uv = hits[0].uv;
     if (!uv) return;
-    window.__userClicked = true;
 
     const lon = BOUNDS.lonMin + uv.x * LON_SPAN;
     const lat = BOUNDS.latMax - uv.y * LAT_SPAN;
 
-    // marker
-    placeMarker(lat, lon);
+    if (isLandPoint(lat, lon)) {
+        const tag = document.getElementById('locTag');
+        tag.textContent = 'Land point — pick the ocean ' + lat.toFixed(1) + '°N, ' + lon.toFixed(1) + '°E';
+        tag.className = 'loc-tag land';
+        tag.style.display = 'block';
+        return;
+    }
+    selectPoint(lat, lon);
+}
 
-    const tag = document.getElementById('locTag');
-    tag.textContent = lat.toFixed(2) + '°N, ' + lon.toFixed(2) + '°E';
-    tag.style.display = 'block';
-    document.getElementById('locInfo').textContent = lat.toFixed(2) + '°N, ' + lon.toFixed(2) + '°E';
+// ---------- minimap (Leaflet) ----------
+function initMinimap() {
+    if (!window.L) { document.getElementById('minimapWrap').style.display = 'none'; return; }
+    miniMap = L.map('minimap', {
+        zoomControl: false, attributionControl: false,
+        scrollWheelZoom: true, minZoom: 3, maxZoom: 9,
+        zoomSnap: 0.5,
+    });
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 15, attribution: '© Esri, DeLorme, NAVTEQ',
+    }).addTo(miniMap);
+    miniMap.fitBounds([[BOUNDS.latMin, BOUNDS.lonMin], [BOUNDS.latMax, BOUNDS.lonMax]], { padding: [3, 3] });
 
-    fetchProfile(lat, lon);
+    // domain outline
+    miniDomain = L.rectangle(
+        [[BOUNDS.latMin, BOUNDS.lonMin], [BOUNDS.latMax, BOUNDS.lonMax]],
+        { color: '#4fc3f7', weight: 1.5, fill: false, dashArray: '5 5' }
+    ).addTo(miniMap);
+
+    miniMarker = L.circleMarker([12.5, 72.5], {
+        radius: 7, color: '#041020', weight: 2, fillColor: '#4fc3f7', fillOpacity: 1,
+    }).addTo(miniMap);
+
+    miniMap.on('click', (e) => {
+        const { lat, lng } = e.latlng;
+        if (lat < BOUNDS.latMin || lat > BOUNDS.latMax || lng < BOUNDS.lonMin || lng > BOUNDS.lonMax) return;
+        if (isLandPoint(lat, lng)) {
+            const tag = document.getElementById('locTag');
+            tag.textContent = 'Land point — pick the ocean';
+            tag.className = 'loc-tag land';
+            tag.style.display = 'block';
+            return;
+        }
+        selectPoint(lat, lng);
+    });
 }
 
 // ---------- API ----------
@@ -505,11 +732,7 @@ async function fetchRealtime() {
 
         // default profile if user hasn't picked a point yet
         if (!window.__userClicked) {
-            placeMarker(12.5, 72.5, !window.__profileLoaded);
-            document.getElementById('locInfo').textContent = '12.50°N, 72.50°E (default)';
-            document.getElementById('locTag').textContent = '12.50°N, 72.50°E';
-            document.getElementById('locTag').style.display = 'block';
-            fetchProfile(12.5, 72.5);
+            selectPoint(12.5, 72.5, { userPicked: false, suffix: ' (default)' });
         }
         window.__profileLoaded = true;
     } catch (e) {
@@ -654,6 +877,7 @@ function animate() {
 
 // ---------- boot ----------
 initScene();
+initMinimap();
 animate();
 
 // auto-fetch on load

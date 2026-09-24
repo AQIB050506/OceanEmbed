@@ -23,3 +23,5 @@ Per `rules.md` §9: significant decisions get one line here with date and reason
 | 14 | 2026-09-24 | Baseline = per-depth linear regression + climatology (not nearest-neighbor) | Simpler to fit/evaluate; linear already shows DL 43× improvement, NN wouldn't change conclusion |
 | 15 | 2026-09-24 | Online demo SSH from Open-Meteo API, not random climatology | Random SSH caused 30.8% flat-profile model collapse; real SSH → 0.3% |
 | 16 | 2026-09-24 | Online frontend = Three.js WebGL (vendored, importmap) not React/Svelte | 3D depth-slicing was the goal; Three.js gives full scene control with zero build step, keeps offline single-server demo simple |
+| 17 | 2026-09-24 | Minimap tiles = Esri World Dark Gray (not CARTO dark) | CARTO dark tiles return "API KEY REQUIRED" placeholder without a key; Esri dark-gray is keyless, dark-themed, labeled |
+| 18 | 2026-09-24 | Land for 3D context derived from test_target.nc NaN mask, not external GeoJSON | Zero extra downloads, perfectly aligned to model grid, includes atolls (Maldives visible); external coastlines would misalign at 0.25° |

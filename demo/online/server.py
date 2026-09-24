@@ -81,6 +81,16 @@ def is_flat_profile(temps):
     return unrealistic or noisy
 
 
+def load_land_mask():
+    """Land mask (True=land) from NaN cells in test_target.nc, computed once."""
+    import xarray as xr
+    with xr.open_dataset(PROCESSED_DIR / "test_target.nc") as ds:
+        t = ds["thetao"].isel(time=0).values
+    mask = np.isnan(t).any(axis=0)  # (101, 221)
+    mask = np.nan_to_num(mask.astype(np.float32))
+    return mask
+
+
 def create_app():
     from fastapi import FastAPI
     from fastapi.staticfiles import StaticFiles
@@ -93,11 +103,16 @@ def create_app():
     )
 
     engine = RealtimeInferenceEngine()
-    cache = {"data": None, "preds": None, "timestamp": None}
+    cache = {"data": None, "preds": None, "timestamp": None, "land": None}
 
     @app.on_event("startup")
     async def startup():
         engine.load_model()
+        try:
+            cache["land"] = load_land_mask()
+            logger.info("Land mask loaded: %.1f%% land", 100 * cache["land"].mean())
+        except Exception as e:
+            logger.warning("Land mask unavailable: %s", e)
 
     class ProfileQuery(BaseModel):
         latitude: float
@@ -228,6 +243,10 @@ def create_app():
         w = preds.shape[2] // stride + (1 if preds.shape[2] % stride else 0)
         # sst input layer for the surface
         sst = cache["data"]["sst"][::stride, ::stride] if cache["data"] else None
+        # land mask at FULL resolution (crisp coastline), independent of stride
+        land = None
+        if cache["land"] is not None:
+            land = [int(v) for v in cache["land"].ravel()]
         return {
             "date": cache["data"]["date"] if cache["data"] else None,
             "depths": DEPTH_LEVELS,
@@ -238,6 +257,9 @@ def create_app():
             "grid_w": w,
             "layers": layers,
             "sst": [round(float(v), 1) for v in sst.ravel()] if sst is not None else None,
+            "land": land,
+            "land_h": cache["land"].shape[0] if cache["land"] is not None else None,
+            "land_w": cache["land"].shape[1] if cache["land"] is not None else None,
             "bounds": {"lat_min": LAT_MIN, "lat_max": LAT_MAX, "lon_min": LON_MIN, "lon_max": LON_MAX},
         }
 

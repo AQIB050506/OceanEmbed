@@ -74,12 +74,14 @@
 - [x] Real SSH from API (not random) — fixed 30.8% flat-profile collapse → 0.3%
 - [x] Server: `/api/realtime`, `/api/profile` (+climatology fallback), `/api/sst_map`, `/api/pred_map`, `/api/volume` (15 depth layers, stride-2, ~5661 values/layer)
 - [x] **Frontend: Three.js WebGL 3D ocean explorer** (vendored offline, importmap, no build step):
-  - Animated wave-shader SST surface (vertex displacement, edge fade)
+  - Animated wave-shader SST surface (vertex displacement, edge fade), waves suppressed over land via mask texture
+  - **Geographic context**: land mask (from test_target NaN, 40.4% land) with coastline highlight baked into textures; 5° graticule + lat/lon tick labels; 11 billboard region labels (India, Arabian Sea, Bay of Bengal...)
   - 15 stacked temperature planes, **depth slicing slider** (0–450m) with lerped opacity transitions
-  - Raycast click → lat/lon → profile fetch; pop-animated marker
+  - Raycast click → lat/lon → profile fetch; land clicks rejected with warning tag
+  - **Leaflet minimap** (bottom-left, Esri dark-gray tiles, keyless): domain outline, synced marker, click-to-select — two-way with 3D view
   - Domain wireframe, depth labels, floor grid, fog
   - Side panel: Chart.js profile (auto-loads default point 12.5°N/72.5°E), count-up indicators, MHW/cyclone status, staggered card reveal animations
-- [x] Headless-browser screenshot verified: scene renders, chart+indicators populated, slider/legend/marker correct
+- [x] Headless-browser screenshot verified: scene renders, land+labels+graticule correct, minimap tiles load (pixel-analyzed: 3k+ colors, no placeholder), chart+indicators populated
 - [x] Start: `python demo/online/start.py` → http://localhost:8000
 
 ### 2.10 Tests & Documentation

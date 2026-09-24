@@ -155,9 +155,10 @@ Per `rules.md` §3: every architecture/hyperparameter/metrics run gets logged he
 **Date:** 2026-09-24
 **Stack:** Three.js r160 (vendored, importmap, no build step) + OrbitControls + Chart.js
 **Features:** wave-shader SST surface (vertex displacement), 15 stacked depth planes, depth-slicing slider (0–450m, lerped opacity), raycast click→profile, pop marker, domain wireframe/depth labels/fog, count-up indicators, staggered card reveals
-**API:** new `/api/volume?stride=2` — 15 layers × 51×111 grid (~5661 values/layer), ~113KB/layer JSON
-**Verification:** `node --check` on extracted module JS; headless Edge screenshots (initial + fully-loaded states); all endpoints 200; pytest 5/5
-**Result:** PASS — 3D scene renders, default profile auto-loads (SST 28.9°C, thermocline 124m), slider/legend/marker verified visually
+**API:** new `/api/volume?stride=2` — 15 layers × 51×111 grid (~5661 values/layer), ~113KB/layer JSON; full-res `land` mask (101×221) + `land_h/land_w`
+**Geography layer (24 Sep, same day):** land mask rendered into textures (dark earth + bright coastline cells), wave suppression over land (vertex-shader mask sampling), 5° graticule + coordinate ticks baked into surface texture, 11 billboard region labels placed via land-mask verification (Maldives=land/atolls), Leaflet minimap (Esri dark-gray keyless tiles — CartoDB requires API key now, returns placeholder), two-way selection sync (`selectPoint`), land-click rejection
+**Verification:** `node --check` on extracted module JS; headless Edge screenshots (initial + fully-loaded states); minimap tile load verified by pixel analysis (3073 unique colors, row-structure std 11.5, 0.49% bright = no API-KEY placeholder); all endpoints 200; pytest 5/5
+**Result:** PASS — 3D scene renders with land/labels/graticule, default profile auto-loads (SST 28.9°C, thermocline 124m), minimap shows domain + synced marker
 
 ---
 
