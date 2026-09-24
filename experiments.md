@@ -120,11 +120,31 @@ Per `rules.md` §3: every architecture/hyperparameter/metrics run gets logged he
 
 ---
 
+## Experiment 6 — Baseline Models (Phase 2)
+**Date:** 2026-09-24
+**Script:** `baseline.py`
+**Config:** Linear regression (per-depth OLS on [sst, ssh, sss, wind_u, wind_v, 1]) + climatology (train-set mean profile); fit on 1095/4380 train days (subsample=4); evaluated on full 346-sample test set + raw ARGO (56,925 points, 345 dates)
+
+**Results:**
+
+| Model | GLORYS RMSE | GLORYS R² | ARGO RMSE | ARGO Corr |
+|-------|------------|-----------|-----------|-----------|
+| Climatology | 3.72°C | 0.59 | 2.79°C | — |
+| Linear regression | 3.55°C | 0.62 | 2.36°C | 0.54 |
+| **DL (AttentionUNet3D)** | **0.083°C** | **0.989** | **1.02°C** | **0.83** |
+
+**Improvement:** DL beats linear baseline by **43× on GLORYS RMSE**, **2.3× on ARGO RMSE**.
+
+**Artifacts:** `models/validation_results/baseline_metrics.json`, `baseline_params.npz`
+**Result:** PASS — baseline established; DL improvement honestly quantified per rules.md §3
+
+---
+
 ## Planned / Not Yet Run
 
 | Experiment | Status | Notes |
 |-----------|--------|-------|
-| Simple baseline (linear/nearest-neighbor) | **NOT DONE** | Required by phase.md Phase 2 — must establish baseline number |
+| Simple baseline (linear/nearest-neighbor) | **DONE 2026-09-24** | See Experiment 6 — DL beats it by 43× (GLORYS) / 2.3× (ARGO) |
 | Thermocline weight increase (2×→4×) | Not run | Expected +2-3% R² |
 | Resume training 50 epochs at lr=1e-5 | Not run | Expected +3-5% R² |
 | temporal_window=10 retrain | Not run | Expected +2-4% R² |

@@ -85,10 +85,11 @@
 
 ## 3. What Is NOT Done (Remaining Work)
 
-### 3.1 CRITICAL — Baseline Model (Phase 2)
-- [ ] **No simple baseline exists** (linear regression / nearest-neighbor surface→subsurface)
-- [ ] Required by `phase.md` Phase 2 and `rules.md` §3 — "Baseline first"
-- [ ] Every model comparison needs this number to quantify DL improvement
+### 3.1 Baseline Model (Phase 2) — DONE
+- [x] Linear regression baseline: GLORYS RMSE=3.55°C, R²=0.62; ARGO RMSE=2.36°C, Corr=0.54
+- [x] Climatology baseline: GLORYS RMSE=3.72°C, R²=0.59; ARGO RMSE=2.79°C
+- [x] DL model beats baseline by 43× (GLORYS) / 2.3× (ARGO) — see `experiments.md` Exp. 6
+- [x] Saved to `models/validation_results/baseline_metrics.json`
 
 ### 3.2 Application Layer on Full Test Set (Phase 5)
 - [ ] Run OHC/MHW/cyclone risk on full test set (currently only 12 precompute dates)
@@ -139,11 +140,9 @@
 
 ### Step 1: Read this file (you're here)
 
-### Step 2: Build the baseline model (CRITICAL)
-```python
-# Linear regression: surface channels → subsurface temperature
-# Fit on train set, evaluate on test set + Argo
-# Save baseline metrics for comparison
+### Step 2: ~~Build the baseline model~~ DONE
+```bash
+python baseline.py   # linear + climatology baselines evaluated on GLORYS + ARGO
 ```
 
 ### Step 3: End-to-end demo test

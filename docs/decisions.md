@@ -20,3 +20,4 @@ Per `rules.md` §9: significant decisions get one line here with date and reason
 | 11 | 2026-09-24 | Demo: two-mode (FastAPI live + static offline fallback) | Judging needs offline; live inference is wow-factor when possible |
 | 12 | 2026-09-24 | Map tiles: online with automatic offline grid fallback | Esri tiles need internet; grid background keeps demo functional offline |
 | 13 | 2026-09-24 | Add ARGO overlay + SST/OHC/Anomaly map layers to demo | design.md §3.2/§3.3 requires ARGO comparison and anomaly overlay |
+| 14 | 2026-09-24 | Baseline = per-depth linear regression + climatology (not nearest-neighbor) | Simpler to fit/evaluate; linear already shows DL 43× improvement, NN wouldn't change conclusion |

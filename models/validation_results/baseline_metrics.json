@@ -1,0 +1,539 @@
+{
+  "linear_regression": {
+    "description": "Per-depth OLS: [sst, ssh, sss, wind_u, wind_v, 1] -> T(z)",
+    "train_subsample": 4,
+    "glorys_test": {
+      "0": {
+        "depth_m": 0,
+        "rmse": 3.350627,
+        "mae": 3.0625,
+        "bias": 0.009491,
+        "r2": 0.123464,
+        "correlation": 0.351704,
+        "n_pixels": 7723066
+      },
+      "5": {
+        "depth_m": 5,
+        "rmse": 3.313797,
+        "mae": 3.029806,
+        "bias": 0.008413,
+        "r2": 0.124252,
+        "correlation": 0.352827,
+        "n_pixels": 7723066
+      },
+      "10": {
+        "depth_m": 10,
+        "rmse": 3.33475,
+        "mae": 3.072436,
+        "bias": 0.00307,
+        "r2": 0.117916,
+        "correlation": 0.343648,
+        "n_pixels": 7723066
+      },
+      "20": {
+        "depth_m": 20,
+        "rmse": 3.333576,
+        "mae": 3.081281,
+        "bias": 0.019645,
+        "r2": 0.113798,
+        "correlation": 0.337544,
+        "n_pixels": 7723066
+      },
+      "30": {
+        "depth_m": 30,
+        "rmse": 3.28599,
+        "mae": 3.043091,
+        "bias": 0.036932,
+        "r2": 0.109767,
+        "correlation": 0.331553,
+        "n_pixels": 7723066
+      },
+      "50": {
+        "depth_m": 50,
+        "rmse": 3.087779,
+        "mae": 2.837893,
+        "bias": 0.089596,
+        "r2": 0.109615,
+        "correlation": 0.332257,
+        "n_pixels": 7723066
+      },
+      "75": {
+        "depth_m": 75,
+        "rmse": 2.361518,
+        "mae": 2.08244,
+        "bias": 0.310492,
+        "r2": 0.212364,
+        "correlation": 0.476402,
+        "n_pixels": 7723066
+      },
+      "100": {
+        "depth_m": 100,
+        "rmse": 1.857193,
+        "mae": 1.580542,
+        "bias": 0.339263,
+        "r2": 0.329705,
+        "correlation": 0.594141,
+        "n_pixels": 7723066
+      },
+      "125": {
+        "depth_m": 125,
+        "rmse": 1.788912,
+        "mae": 1.482036,
+        "bias": 0.12246,
+        "r2": 0.279259,
+        "correlation": 0.533652,
+        "n_pixels": 7723066
+      },
+      "150": {
+        "depth_m": 150,
+        "rmse": 2.582494,
+        "mae": 2.304924,
+        "bias": -0.028969,
+        "r2": 0.105565,
+        "correlation": 0.329775,
+        "n_pixels": 7723066
+      },
+      "200": {
+        "depth_m": 200,
+        "rmse": 3.314798,
+        "mae": 3.052491,
+        "bias": -0.133916,
+        "r2": 0.042775,
+        "correlation": 0.21475,
+        "n_pixels": 7723066
+      },
+      "250": {
+        "depth_m": 250,
+        "rmse": 4.329618,
+        "mae": 4.064286,
+        "bias": -0.230183,
+        "r2": 0.016905,
+        "correlation": 0.141374,
+        "n_pixels": 7723066
+      },
+      "300": {
+        "depth_m": 300,
+        "rmse": 4.732889,
+        "mae": 4.464873,
+        "bias": -0.227087,
+        "r2": 0.015889,
+        "correlation": 0.135218,
+        "n_pixels": 7723066
+      },
+      "400": {
+        "depth_m": 400,
+        "rmse": 5.046295,
+        "mae": 4.778352,
+        "bias": -0.22653,
+        "r2": 0.015877,
+        "correlation": 0.133944,
+        "n_pixels": 7723066
+      },
+      "450": {
+        "depth_m": 450,
+        "rmse": 5.293057,
+        "mae": 5.021843,
+        "bias": -0.234135,
+        "r2": 0.015498,
+        "correlation": 0.132328,
+        "n_pixels": 7723066
+      },
+      "overall": {
+        "rmse": 3.552314,
+        "mae": 3.130586,
+        "r2": 0.622419,
+        "n_pixels": 115845990,
+        "model": "linear_regression"
+      }
+    },
+    "argo": {
+      "0": {
+        "rmse": 2.313141,
+        "mae": 2.194249,
+        "bias": -2.193243,
+        "correlation": 0.8324,
+        "n_points": 2662
+      },
+      "5": {
+        "rmse": 2.312207,
+        "mae": 2.200446,
+        "bias": -2.200335,
+        "correlation": 0.846176,
+        "n_points": 5564
+      },
+      "10": {
+        "rmse": 2.318016,
+        "mae": 2.204746,
+        "bias": -2.204746,
+        "correlation": 0.849194,
+        "n_points": 4829
+      },
+      "20": {
+        "rmse": 2.232944,
+        "mae": 2.117663,
+        "bias": -2.110364,
+        "correlation": 0.855122,
+        "n_points": 3181
+      },
+      "30": {
+        "rmse": 2.181005,
+        "mae": 2.020188,
+        "bias": -1.953176,
+        "correlation": 0.771177,
+        "n_points": 3091
+      },
+      "50": {
+        "rmse": 2.157251,
+        "mae": 1.920699,
+        "bias": -1.615452,
+        "correlation": 0.530598,
+        "n_points": 4274
+      },
+      "75": {
+        "rmse": 1.908268,
+        "mae": 1.538919,
+        "bias": -0.573909,
+        "correlation": 0.496295,
+        "n_points": 4207
+      },
+      "100": {
+        "rmse": 1.903115,
+        "mae": 1.533801,
+        "bias": 1.00462,
+        "correlation": 0.605245,
+        "n_points": 4380
+      },
+      "125": {
+        "rmse": 1.561943,
+        "mae": 1.188277,
+        "bias": 0.763696,
+        "correlation": 0.720917,
+        "n_points": 4231
+      },
+      "150": {
+        "rmse": 1.700865,
+        "mae": 1.32989,
+        "bias": 0.988734,
+        "correlation": 0.668929,
+        "n_points": 4236
+      },
+      "200": {
+        "rmse": 2.705734,
+        "mae": 2.296268,
+        "bias": 2.220344,
+        "correlation": 0.559814,
+        "n_points": 4293
+      },
+      "250": {
+        "rmse": 2.565713,
+        "mae": 2.139045,
+        "bias": 2.016128,
+        "correlation": 0.320838,
+        "n_points": 3010
+      },
+      "300": {
+        "rmse": 2.776085,
+        "mae": 2.361615,
+        "bias": 2.294752,
+        "correlation": 0.116387,
+        "n_points": 3060
+      },
+      "400": {
+        "rmse": 3.331388,
+        "mae": 2.980064,
+        "bias": 2.978011,
+        "correlation": -0.00037,
+        "n_points": 3041
+      },
+      "450": {
+        "rmse": 3.436096,
+        "mae": 3.078901,
+        "bias": 3.077103,
+        "correlation": -0.070606,
+        "n_points": 2866
+      },
+      "overall": {
+        "mean_rmse": 2.360251,
+        "mean_correlation": 0.540141,
+        "mean_mae": 2.073651,
+        "n_depths": 15,
+        "n_total_points": 56925,
+        "n_common_dates": 345
+      }
+    }
+  },
+  "climatology": {
+    "description": "Training-set mean temperature profile (constant in space/time)",
+    "glorys_test": {
+      "0": {
+        "depth_m": 0,
+        "rmse": 3.618798,
+        "mae": 3.400398,
+        "bias": -0.536346,
+        "r2": -0.02246,
+        "correlation": 0.0,
+        "n_pixels": 7723066
+      },
+      "5": {
+        "depth_m": 5,
+        "rmse": 3.580968,
+        "mae": 3.367436,
+        "bias": -0.532953,
+        "r2": -0.022652,
+        "correlation": 0.0,
+        "n_pixels": 7723066
+      },
+      "10": {
+        "depth_m": 10,
+        "rmse": 3.589429,
+        "mae": 3.388545,
+        "bias": -0.526174,
+        "r2": -0.02196,
+        "correlation": 0.0,
+        "n_pixels": 7723066
+      },
+      "20": {
+        "depth_m": 20,
+        "rmse": 3.578531,
+        "mae": 3.386671,
+        "bias": -0.515907,
+        "r2": -0.021225,
+        "correlation": -0.0,
+        "n_pixels": 7723066
+      },
+      "30": {
+        "depth_m": 30,
+        "rmse": 3.520438,
+        "mae": 3.341056,
+        "bias": -0.51417,
+        "r2": -0.021796,
+        "correlation": NaN,
+        "n_pixels": 7723066
+      },
+      "50": {
+        "depth_m": 50,
+        "rmse": 3.31049,
+        "mae": 3.115994,
+        "bias": -0.501181,
+        "r2": -0.023457,
+        "correlation": -0.0,
+        "n_pixels": 7723066
+      },
+      "75": {
+        "depth_m": 75,
+        "rmse": 2.690219,
+        "mae": 2.352655,
+        "bias": -0.396096,
+        "r2": -0.022159,
+        "correlation": -0.0,
+        "n_pixels": 7723066
+      },
+      "100": {
+        "depth_m": 100,
+        "rmse": 2.296605,
+        "mae": 1.823123,
+        "bias": -0.358674,
+        "r2": -0.025001,
+        "correlation": NaN,
+        "n_pixels": 7723066
+      },
+      "125": {
+        "depth_m": 125,
+        "rmse": 2.128389,
+        "mae": 1.842582,
+        "bias": -0.299795,
+        "r2": -0.020242,
+        "correlation": -0.0,
+        "n_pixels": 7723066
+      },
+      "150": {
+        "depth_m": 150,
+        "rmse": 2.744064,
+        "mae": 2.506541,
+        "bias": -0.271061,
+        "r2": -0.009854,
+        "correlation": -0.0,
+        "n_pixels": 7723066
+      },
+      "200": {
+        "depth_m": 200,
+        "rmse": 3.39625,
+        "mae": 3.157168,
+        "bias": -0.235835,
+        "r2": -0.004845,
+        "correlation": -0.0,
+        "n_pixels": 7723066
+      },
+      "250": {
+        "depth_m": 250,
+        "rmse": 4.371192,
+        "mae": 4.125099,
+        "bias": -0.198449,
+        "r2": -0.002065,
+        "correlation": NaN,
+        "n_pixels": 7723066
+      },
+      "300": {
+        "depth_m": 300,
+        "rmse": 4.774194,
+        "mae": 4.540738,
+        "bias": -0.176155,
+        "r2": -0.001363,
+        "correlation": NaN,
+        "n_pixels": 7723066
+      },
+      "400": {
+        "depth_m": 400,
+        "rmse": 5.089735,
+        "mae": 4.875822,
+        "bias": -0.171704,
+        "r2": -0.001139,
+        "correlation": -0.0,
+        "n_pixels": 7723066
+      },
+      "450": {
+        "depth_m": 450,
+        "rmse": 5.337624,
+        "mae": 5.132015,
+        "bias": -0.18099,
+        "r2": -0.001151,
+        "correlation": 0.0,
+        "n_pixels": 7723066
+      },
+      "overall": {
+        "rmse": 3.718097,
+        "mae": 3.357056,
+        "r2": 0.586354,
+        "n_pixels": 115845990,
+        "model": "climatology"
+      }
+    },
+    "argo": {
+      "0": {
+        "rmse": 3.22151,
+        "mae": 3.020173,
+        "bias": -2.981189,
+        "correlation": NaN,
+        "n_points": 2662
+      },
+      "5": {
+        "rmse": 3.190321,
+        "mae": 2.976813,
+        "bias": -2.943788,
+        "correlation": 0.0,
+        "n_points": 5564
+      },
+      "10": {
+        "rmse": 3.147327,
+        "mae": 2.910353,
+        "bias": -2.883656,
+        "correlation": NaN,
+        "n_points": 4829
+      },
+      "20": {
+        "rmse": 3.006299,
+        "mae": 2.720055,
+        "bias": -2.699729,
+        "correlation": 0.0,
+        "n_points": 3181
+      },
+      "30": {
+        "rmse": 2.819552,
+        "mae": 2.479806,
+        "bias": -2.42678,
+        "correlation": -0.0,
+        "n_points": 3091
+      },
+      "50": {
+        "rmse": 2.668325,
+        "mae": 2.32398,
+        "bias": -2.136338,
+        "correlation": 0.0,
+        "n_points": 4274
+      },
+      "75": {
+        "rmse": 2.420857,
+        "mae": 1.95704,
+        "bias": -1.249179,
+        "correlation": -0.0,
+        "n_points": 4207
+      },
+      "100": {
+        "rmse": 2.046435,
+        "mae": 1.591401,
+        "bias": 0.277385,
+        "correlation": NaN,
+        "n_points": 4380
+      },
+      "125": {
+        "rmse": 1.946201,
+        "mae": 1.510125,
+        "bias": 0.245937,
+        "correlation": NaN,
+        "n_points": 4231
+      },
+      "150": {
+        "rmse": 1.953097,
+        "mae": 1.517146,
+        "bias": 0.677773,
+        "correlation": 0.0,
+        "n_points": 4236
+      },
+      "200": {
+        "rmse": 2.783092,
+        "mae": 2.204046,
+        "bias": 2.077201,
+        "correlation": -0.0,
+        "n_points": 4293
+      },
+      "250": {
+        "rmse": 2.677628,
+        "mae": 2.151382,
+        "bias": 2.103742,
+        "correlation": NaN,
+        "n_points": 3010
+      },
+      "300": {
+        "rmse": 2.898653,
+        "mae": 2.523883,
+        "bias": 2.522062,
+        "correlation": NaN,
+        "n_points": 3060
+      },
+      "400": {
+        "rmse": 3.512058,
+        "mae": 3.298882,
+        "bias": 3.298882,
+        "correlation": NaN,
+        "n_points": 3041
+      },
+      "450": {
+        "rmse": 3.62891,
+        "mae": 3.440999,
+        "bias": 3.440999,
+        "correlation": -0.0,
+        "n_points": 2866
+      },
+      "overall": {
+        "mean_rmse": 2.794684,
+        "mean_correlation": NaN,
+        "mean_mae": 2.441739,
+        "n_depths": 15,
+        "n_total_points": 56925,
+        "n_common_dates": 345
+      }
+    }
+  },
+  "dl_model_reference": {
+    "description": "AttentionUNet3D (trained 100 epochs) for comparison",
+    "glorys_test_overall": {
+      "rmse": 0.083,
+      "mae": 0.045,
+      "r2": 0.989
+    },
+    "argo_overall": {
+      "mean_rmse": 1.02,
+      "mean_correlation": 0.83
+    }
+  }
+}
