@@ -132,23 +132,22 @@ class DemoDataStore:
 
     def load_precomputed(self):
         """Load all precomputed demo outputs."""
-        if not self.precomputed_dir.exists():
-            logger.warning(f"Precomputed directory not found: {self.precomputed_dir}")
-            return False
-
         profiles_file = self.precomputed_dir / "profiles.json"
         if not profiles_file.exists():
-            # Try demo_data.json in frontend/data/
+            # Fallback: demo_data.json in frontend/data/
             profiles_file = Path(__file__).parent.parent / "frontend" / "data" / "demo_data.json"
 
-        if profiles_file.exists():
-            with open(profiles_file) as f:
-                data = json.load(f)
-                self.full_data = data
-                self.available_dates = data.get("dates", [])
-                self.available_locations = data.get("locations", [])
+        if not profiles_file.exists():
+            logger.warning(f"No precomputed data found (looked in {self.precomputed_dir} and frontend/data/)")
+            return False
 
-        logger.info(f"Loaded {len(self.available_dates)} dates, {len(self.available_locations)} locations")
+        with open(profiles_file) as f:
+            data = json.load(f)
+            self.full_data = data
+            self.available_dates = data.get("dates", [])
+            self.available_locations = data.get("locations", [])
+
+        logger.info(f"Loaded {len(self.available_dates)} dates, {len(self.available_locations)} locations from {profiles_file}")
         return True
 
     def get_profile(self, lat: float, lon: float, date: Optional[str] = None) -> dict:
@@ -171,12 +170,15 @@ class DemoDataStore:
             profiles = day_data.get("profiles", [])
             if loc_idx < len(profiles):
                 p = profiles[loc_idx]
-                return {
+                result = {
                     "depths": DEPTH_LEVELS,
                     "temperature": p.get("temperatures", []),
                     "source": "precomputed",
                     "name": p.get("name", ""),
                 }
+                if "argo" in p:
+                    result["argo"] = p["argo"]
+                return result
 
         return {"depths": DEPTH_LEVELS, "temperature": [], "source": "no_data",
                 "error": f"No precomputed profile for ({lat:.2f}, {lon:.2f}) on {date}"}
@@ -242,13 +244,17 @@ def create_demo_app():
         profile = store.get_profile(query.latitude, query.longitude, query.date)
         if not profile:
             raise HTTPException(status_code=404, detail="Profile not found")
-        return {
+        result = {
             "latitude": query.latitude,
             "longitude": query.longitude,
             "depths": profile.get("depths", DEPTH_LEVELS),
             "temperature": profile.get("temperature", []),
             "source": profile.get("source", "reconstructed"),
+            "name": profile.get("name", ""),
         }
+        if "argo" in profile:
+            result["argo"] = profile["argo"]
+        return result
 
     @app.post("/api/predict")
     async def predict_live(req: LivePredictionRequest):

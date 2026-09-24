@@ -32,7 +32,8 @@ OUTPUT_DIR = Path(__file__).parent / "frontend" / "data"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 RAW_ARGO_PATH = DATA_DIR / "incois_argo" / "Indian_ARGO_Floats_4298_d1fb_dfa5_U1789797672771.nc"
-ARGO_NEARBY_RADIUS = 0.5  # degrees — nearby ARGO obs for comparison
+ARGO_NEARBY_RADIUS = 2.0  # degrees — nearby ARGO obs for comparison (floats drift, ~10-day cycles)
+ARGO_DAY_WINDOW = 5       # days — temporal window for ARGO matching
 DEPTH_TOL = 15.0  # meters — depth matching tolerance for ARGO
 
 # Key locations for North Indian Ocean demo
@@ -284,11 +285,11 @@ def get_argo_profile(argo_data, date_str, lat, lon, pred_profile):
     if argo_data is None:
         return None
 
-    # Check exact date, then ±3 days
+    # Check exact date, then ±ARGO_DAY_WINDOW days
     from datetime import datetime, timedelta
     base = datetime.strptime(date_str, "%Y-%m-%d")
     nearby_dates = []
-    for delta in range(-3, 4):
+    for delta in range(-ARGO_DAY_WINDOW, ARGO_DAY_WINDOW + 1):
         d = (base + timedelta(days=delta)).strftime("%Y-%m-%d")
         if d in argo_data["date_idx"]:
             nearby_dates.append(d)
