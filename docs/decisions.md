@@ -22,3 +22,4 @@ Per `rules.md` §9: significant decisions get one line here with date and reason
 | 13 | 2026-09-24 | Add ARGO overlay + SST/OHC/Anomaly map layers to demo | design.md §3.2/§3.3 requires ARGO comparison and anomaly overlay |
 | 14 | 2026-09-24 | Baseline = per-depth linear regression + climatology (not nearest-neighbor) | Simpler to fit/evaluate; linear already shows DL 43× improvement, NN wouldn't change conclusion |
 | 15 | 2026-09-24 | Online demo SSH from Open-Meteo API, not random climatology | Random SSH caused 30.8% flat-profile model collapse; real SSH → 0.3% |
+| 16 | 2026-09-24 | Online frontend = Three.js WebGL (vendored, importmap) not React/Svelte | 3D depth-slicing was the goal; Three.js gives full scene control with zero build step, keeps offline single-server demo simple |

@@ -68,16 +68,19 @@
   - `python run.py demo` — full FastAPI (live inference + precomputed)
   - `python demo/serve_offline.py` — static fallback (precomputed only, no Python deps needed)
 
-### 2.9 Online Demo (demo/online/) — BUILT & VERIFIED (24 Sep 2026)
+### 2.9 Online Demo (demo/online/) — 3D REWRITE VERIFIED (24 Sep 2026)
 - [x] Realtime fetcher — Open-Meteo Marine (SST+SSH) + Weather (wind), parallel ThreadPool (12 workers, ~12s)
 - [x] Correct model input shape `(5, 5, 101, 221)` + training normalization stats (SST Kelvin conversion)
 - [x] Real SSH from API (not random) — fixed 30.8% flat-profile collapse → 0.3%
-- [x] Smooth climatological SSS (Arabian Sea salty / Bay of Bengal fresh)
-- [x] Flat-profile climatology fallback in `/api/profile` (belt-and-suspenders)
-- [x] Server: `/api/realtime`, `/api/profile`, `/api/sst_map`, `/api/pred_map?depth_idx=N`
-- [x] Frontend: map overlays (None / Input SST / Predicted T @ depth selector), color legend, profile chart, indicators, validation stats card
-- [x] E2E verified: inference 0.49s, realistic profile (28.4→11.9°C), all endpoints 200
-- [x] Start: `python demo/online/start.py` or `python demo/online/server.py`
+- [x] Server: `/api/realtime`, `/api/profile` (+climatology fallback), `/api/sst_map`, `/api/pred_map`, `/api/volume` (15 depth layers, stride-2, ~5661 values/layer)
+- [x] **Frontend: Three.js WebGL 3D ocean explorer** (vendored offline, importmap, no build step):
+  - Animated wave-shader SST surface (vertex displacement, edge fade)
+  - 15 stacked temperature planes, **depth slicing slider** (0–450m) with lerped opacity transitions
+  - Raycast click → lat/lon → profile fetch; pop-animated marker
+  - Domain wireframe, depth labels, floor grid, fog
+  - Side panel: Chart.js profile (auto-loads default point 12.5°N/72.5°E), count-up indicators, MHW/cyclone status, staggered card reveal animations
+- [x] Headless-browser screenshot verified: scene renders, chart+indicators populated, slider/legend/marker correct
+- [x] Start: `python demo/online/start.py` → http://localhost:8000
 
 ### 2.10 Tests & Documentation
 - [x] 5 pytest tests passing (forward, backward, loss, spatial sizes, app products)

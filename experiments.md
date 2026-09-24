@@ -151,6 +151,16 @@ Per `rules.md` §3: every architecture/hyperparameter/metrics run gets logged he
 
 ---
 
+## Experiment 8 — 3D WebGL Frontend (Three.js)
+**Date:** 2026-09-24
+**Stack:** Three.js r160 (vendored, importmap, no build step) + OrbitControls + Chart.js
+**Features:** wave-shader SST surface (vertex displacement), 15 stacked depth planes, depth-slicing slider (0–450m, lerped opacity), raycast click→profile, pop marker, domain wireframe/depth labels/fog, count-up indicators, staggered card reveals
+**API:** new `/api/volume?stride=2` — 15 layers × 51×111 grid (~5661 values/layer), ~113KB/layer JSON
+**Verification:** `node --check` on extracted module JS; headless Edge screenshots (initial + fully-loaded states); all endpoints 200; pytest 5/5
+**Result:** PASS — 3D scene renders, default profile auto-loads (SST 28.9°C, thermocline 124m), slider/legend/marker verified visually
+
+---
+
 ## Planned / Not Yet Run
 
 | Experiment | Status | Notes |

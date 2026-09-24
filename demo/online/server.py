@@ -208,7 +208,37 @@ def create_app():
         pred = cache["preds"][depth_idx]
         return {
             "depth": DEPTH_LEVELS[depth_idx],
-            "temperature": [[round(v, 2) for v in row] for row in pred.tolist()],
+            "temperature": [[round(v, 1) for v in row] for row in pred.tolist()],
+        }
+
+    @app.get("/api/volume")
+    async def get_volume(stride: int = 2):
+        """
+        All 15 depth layers downsampled by `stride` for the 3D viewer.
+        Returns flattened Float32-style arrays (rounded to 1 decimal) per depth.
+        """
+        if cache["preds"] is None:
+            return {"error": "No predictions"}
+        preds = cache["preds"]  # (15, 101, 221)
+        layers = []
+        for d in range(preds.shape[0]):
+            layer = preds[d, ::stride, ::stride]
+            layers.append([round(float(v), 1) for v in layer.ravel()])
+        h = preds.shape[1] // stride + (1 if preds.shape[1] % stride else 0)
+        w = preds.shape[2] // stride + (1 if preds.shape[2] % stride else 0)
+        # sst input layer for the surface
+        sst = cache["data"]["sst"][::stride, ::stride] if cache["data"] else None
+        return {
+            "date": cache["data"]["date"] if cache["data"] else None,
+            "depths": DEPTH_LEVELS,
+            "n_lat": preds.shape[1],
+            "n_lon": preds.shape[2],
+            "stride": stride,
+            "grid_h": h,
+            "grid_w": w,
+            "layers": layers,
+            "sst": [round(float(v), 1) for v in sst.ravel()] if sst is not None else None,
+            "bounds": {"lat_min": LAT_MIN, "lat_max": LAT_MAX, "lon_min": LON_MIN, "lon_max": LON_MAX},
         }
 
     frontend_dir = Path(__file__).parent / "frontend"
