@@ -1,0 +1,1762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OceanEmbed — Subsurface Ocean Temperature Reconstruction</title>
+    <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
+    <script src="vendor/leaflet/leaflet.js"></script>
+    <script src="vendor/chartjs/chart.js"></script>
+    <style>
+        :root {
+            --bg-primary: #060d1f;
+            --bg-secondary: #0b1426;
+            --bg-card: rgba(11, 20, 38, 0.85);
+            --bg-card-hover: rgba(15, 28, 50, 0.92);
+            --bg-input: #050c1a;
+            --accent: #06b6d4;
+            --accent-dim: rgba(6, 182, 212, 0.15);
+            --accent-glow: rgba(6, 182, 212, 0.3);
+            --text-primary: #e2e8f0;
+            --text-secondary: #8faec8;
+            --text-dim: #4a6a84;
+            --border: rgba(6, 182, 212, 0.12);
+            --border-glow: rgba(6, 182, 212, 0.25);
+            --safe: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --font-body: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --font-mono: 'JetBrains Mono', 'Consolas', 'Fira Code', 'SF Mono', monospace;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border-glow); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, #0f1d36 100%);
+            padding: 0 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+            height: 48px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 1px 16px rgba(6, 182, 212, 0.08);
+        }
+        .header-left { display: flex; align-items: center; gap: 16px; }
+        .header h1 {
+            font-size: 18px; font-weight: 700; color: var(--accent);
+            letter-spacing: -0.3px;
+        }
+        .header .subtitle {
+            font-size: 10px; color: var(--text-secondary);
+            letter-spacing: 0.2px; margin-top: 1px;
+        }
+        .header-right { display: flex; align-items: center; gap: 10px; }
+        .badge {
+            font-size: 9px; font-weight: 600;
+            background: var(--accent-dim); border: 1px solid var(--border);
+            border-radius: 20px; padding: 3px 10px; color: var(--text-secondary);
+            letter-spacing: 0.3px; text-transform: uppercase;
+        }
+        .badge.live {
+            background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.3);
+            color: var(--safe);
+        }
+
+        .main-container { display: flex; height: calc(100vh - 52px); }
+
+        /* Map */
+        .map-panel { flex: 1; position: relative; }
+        #map { width: 100%; height: 100%; background: var(--bg-primary); }
+
+        .map-click-hint {
+            position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+            background: rgba(6, 13, 31, 0.9); border: 1px solid var(--border-glow);
+            border-radius: 20px; padding: 8px 18px; font-size: 11px; color: var(--accent);
+            z-index: 999; pointer-events: none; white-space: nowrap;
+            transition: opacity 0.6s ease;
+            backdrop-filter: blur(8px);
+            font-weight: 500;
+        }
+        .map-click-hint.faded { opacity: 0 !important; }
+
+        /* Side Panel */
+        .side-panel {
+            width: 420px;
+            background: var(--bg-secondary);
+            border-left: 1px solid var(--border);
+            overflow-y: auto; padding: 14px;
+        }
+
+        /* Tab Bar */
+        .tab-bar { display: flex; gap: 4px; margin-bottom: 14px; }
+        .tab-btn {
+            flex: 1; padding: 9px 0; text-align: center;
+            background: var(--bg-primary); border: 1px solid var(--border);
+            border-radius: 8px; cursor: pointer; font-size: 11px; font-weight: 600;
+            color: var(--text-secondary); transition: all 0.25s ease;
+            letter-spacing: 0.3px;
+        }
+        .tab-btn:hover {
+            background: var(--bg-card); border-color: var(--border-glow);
+            color: var(--text-primary);
+        }
+        .tab-btn.active {
+            background: linear-gradient(135deg, var(--accent), #0891b2);
+            color: #fff; border-color: transparent;
+            box-shadow: 0 0 16px rgba(6, 182, 212, 0.25);
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Panel Sections */
+        .panel-section {
+            margin-bottom: 12px;
+            background: var(--bg-card);
+            border-radius: 10px; padding: 14px;
+            border: 1px solid var(--border);
+            backdrop-filter: blur(8px);
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        .panel-section:hover {
+            border-color: var(--border-glow);
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.05);
+        }
+        .panel-section h3 {
+            font-size: 10px; text-transform: uppercase;
+            color: var(--accent); margin-bottom: 10px; letter-spacing: 1px;
+            font-weight: 700;
+        }
+
+        .chart-container { height: 280px; position: relative; }
+
+        /* Info Grid */
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .info-item {
+            background: var(--bg-input); border-radius: 8px; padding: 10px 12px;
+            border: 1px solid var(--border);
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .info-item:hover {
+            border-color: var(--border-glow);
+            box-shadow: 0 0 12px rgba(6, 182, 212, 0.08);
+        }
+        .info-label {
+            font-size: 9px; color: var(--text-dim); text-transform: uppercase;
+            letter-spacing: 0.6px; font-weight: 600;
+        }
+        .info-value {
+            font-size: 18px; font-weight: 700; color: var(--accent);
+            margin-top: 2px; font-family: var(--font-mono);
+        }
+        .info-unit { font-size: 10px; color: var(--text-secondary); font-weight: 400; }
+
+        /* Date / Month selectors */
+        .date-selector { display: flex; gap: 5px; margin-bottom: 10px; flex-wrap: wrap; }
+        .date-btn {
+            background: var(--bg-input); border: 1px solid var(--border);
+            color: var(--text-secondary); padding: 4px 10px; border-radius: 6px;
+            cursor: pointer; font-size: 10px; transition: all 0.2s;
+            font-weight: 500;
+        }
+        .date-btn:hover { background: var(--bg-card); border-color: var(--border-glow); color: var(--text-primary); }
+        .date-btn.active {
+            background: var(--accent); color: #fff; border-color: transparent;
+            font-weight: 700; box-shadow: 0 0 10px rgba(6, 182, 212, 0.2);
+        }
+
+        .month-tabs { display: flex; gap: 3px; margin-bottom: 10px; }
+        .month-tab {
+            flex: 1; text-align: center; padding: 5px 0; border-radius: 6px;
+            background: var(--bg-input); border: 1px solid var(--border);
+            cursor: pointer; font-size: 9px; font-weight: 600;
+            color: var(--text-secondary); transition: all 0.2s;
+            letter-spacing: 0.3px;
+        }
+        .month-tab:hover { background: var(--bg-card); border-color: var(--border-glow); }
+        .month-tab.active {
+            background: var(--accent-dim); color: var(--accent);
+            border-color: var(--accent);
+        }
+
+        /* Location list */
+        .location-list { max-height: 140px; overflow-y: auto; }
+        .location-item {
+            display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+            border-radius: 6px; cursor: pointer; transition: all 0.2s;
+            font-size: 11px; border: 1px solid transparent;
+        }
+        .location-item:hover { background: var(--accent-dim); border-color: var(--border); }
+        .location-item.active {
+            background: var(--accent-dim); border-left: 2px solid var(--accent);
+            border-color: var(--border-glow);
+        }
+        .location-dot {
+            width: 7px; height: 7px; border-radius: 50%;
+            background: var(--accent); flex-shrink: 0;
+            box-shadow: 0 0 6px rgba(6, 182, 212, 0.4);
+        }
+        .location-name { color: var(--text-primary); font-weight: 500; }
+        .location-coords { color: var(--text-dim); font-size: 10px; margin-left: auto; font-family: var(--font-mono); }
+
+        /* Status pills */
+        .status-bar {
+            display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+            border-radius: 8px; margin-top: 8px; font-size: 11px; font-weight: 500;
+            transition: all 0.2s;
+        }
+        .status-bar.safe {
+            background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2);
+            border-left: 3px solid var(--safe);
+        }
+        .status-bar.warning {
+            background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2);
+            border-left: 3px solid var(--warning);
+        }
+        .status-bar.danger {
+            background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2);
+            border-left: 3px solid var(--danger);
+        }
+        .status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+        .status-dot.safe { background: var(--safe); box-shadow: 0 0 6px var(--safe); }
+        .status-dot.warning { background: var(--warning); box-shadow: 0 0 6px var(--warning); }
+        .status-dot.danger { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+
+        /* Legend */
+        .legend {
+            display: flex; align-items: center; gap: 6px;
+            margin-top: 8px; font-size: 9px; color: var(--text-dim);
+            font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .legend-bar {
+            flex: 1; height: 8px; border-radius: 4px;
+            background: linear-gradient(90deg, #1e3a5f, #06b6d4, #fbbf24, #ef4444);
+        }
+
+        /* Overlay toggle buttons */
+        .overlay-btn {
+            flex: 1; padding: 7px 0; text-align: center;
+            background: var(--bg-primary); border: 1px solid var(--border);
+            border-radius: 6px; cursor: pointer; font-size: 10px; font-weight: 600;
+            color: var(--text-secondary); transition: all 0.2s ease;
+            letter-spacing: 0.3px; min-width: 50px;
+        }
+        .overlay-btn:hover { background: var(--bg-card); border-color: var(--border-glow); color: var(--text-primary); }
+        .overlay-btn.active {
+            background: linear-gradient(135deg, var(--accent), #0891b2);
+            color: #fff; border-color: transparent;
+            box-shadow: 0 0 12px rgba(6, 182, 212, 0.25);
+        }
+
+        /* Flow steps */
+        .flow-step {
+            display: flex; align-items: center; gap: 10px; padding: 4px 0;
+            font-size: 11px; color: var(--text-secondary);
+        }
+        .flow-num {
+            width: 20px; height: 20px; border-radius: 50%;
+            background: var(--accent-dim); color: var(--accent); display: flex;
+            align-items: center; justify-content: center;
+            font-size: 9px; font-weight: 700; flex-shrink: 0;
+            border: 1px solid var(--border-glow);
+        }
+        .flow-arrow { color: var(--accent); font-size: 12px; text-align: center; padding-left: 5px; }
+
+        /* Validation badge */
+        .validation-badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2);
+            border-radius: 6px; padding: 4px 10px; font-size: 9px;
+            color: var(--safe); margin-top: 8px; font-weight: 600;
+        }
+
+        /* Loading overlay */
+        .loading-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(6, 13, 31, 0.92); display: flex;
+            flex-direction: column; align-items: center; justify-content: center;
+            z-index: 1000; backdrop-filter: blur(4px);
+        }
+        .spinner {
+            width: 40px; height: 40px; border: 3px solid var(--border);
+            border-top-color: var(--accent); border-radius: 50%;
+            animation: spin 0.8s linear infinite; margin-bottom: 14px;
+        }
+        .loading-text { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Form */
+        .form-group { margin-bottom: 10px; }
+        .form-label {
+            font-size: 10px; color: var(--text-secondary); margin-bottom: 4px;
+            display: block; font-weight: 600; letter-spacing: 0.3px;
+        }
+        .form-sublabel { font-size: 9px; color: var(--text-dim); display: block; margin-bottom: 4px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .form-input {
+            width: 100%; padding: 9px 12px; background: var(--bg-input);
+            border: 1px solid var(--border); border-radius: 8px;
+            color: var(--text-primary); font-size: 13px; font-family: var(--font-mono);
+            transition: all 0.25s ease;
+        }
+        .form-input:focus {
+            outline: none; border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-dim), 0 0 16px rgba(6, 182, 212, 0.1);
+        }
+        .form-input::placeholder { color: var(--text-dim); }
+
+        /* Predict button */
+        .predict-btn {
+            width: 100%; padding: 12px; margin-top: 4px;
+            background: linear-gradient(135deg, var(--accent), #0891b2);
+            border: none; border-radius: 8px;
+            color: #fff; font-size: 13px; font-weight: 700;
+            cursor: pointer; transition: all 0.25s ease;
+            letter-spacing: 0.4px;
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.2);
+        }
+        .predict-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 24px rgba(6, 182, 212, 0.3);
+        }
+        .predict-btn:active { transform: translateY(0); }
+        .predict-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        .predict-btn .spinner-sm {
+            display: inline-block; width: 14px; height: 14px;
+            border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff;
+            border-radius: 50%; animation: spin 0.8s linear infinite;
+            vertical-align: middle; margin-right: 6px;
+        }
+
+        /* Result header */
+        .result-header {
+            display: flex; align-items: center; gap: 8px;
+            margin-bottom: 8px; padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+        .result-badge {
+            font-size: 9px; font-weight: 700;
+            background: var(--accent-dim); border: 1px solid var(--border-glow);
+            border-radius: 4px; padding: 2px 8px; color: var(--accent);
+            letter-spacing: 0.5px;
+        }
+
+        /* Preset chips */
+        .preset-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; }
+        .preset-chip {
+            font-size: 9px; font-weight: 600; padding: 4px 10px; border-radius: 14px;
+            background: var(--bg-input); border: 1px solid var(--border);
+            color: var(--text-secondary); cursor: pointer; transition: all 0.2s;
+            letter-spacing: 0.2px;
+        }
+        .preset-chip:hover {
+            background: var(--accent-dim); border-color: var(--accent); color: var(--accent);
+            box-shadow: 0 0 10px rgba(6, 182, 212, 0.1);
+        }
+
+        /* Toast */
+        .toast-container {
+            position: fixed; top: 60px; right: 20px; z-index: 9999;
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        .toast {
+            background: rgba(11, 20, 38, 0.95); border: 1px solid var(--border-glow);
+            border-radius: 8px; padding: 10px 16px; font-size: 12px;
+            color: var(--text-primary); backdrop-filter: blur(12px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            animation: toastIn 0.3s ease forwards;
+            max-width: 300px; font-weight: 500;
+        }
+        .toast.error { border-color: rgba(239, 68, 68, 0.4); }
+        .toast.error .toast-dot { background: var(--danger); }
+        .toast.info { border-color: var(--border-glow); }
+        .toast.info .toast-dot { background: var(--accent); }
+        .toast-dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            display: inline-block; margin-right: 8px; flex-shrink: 0;
+        }
+        .toast.fade-out { animation: toastOut 0.3s ease forwards; }
+
+        /* Fish Forecast */
+        .fish-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .fish-card:hover { border-color: var(--accent); background: var(--bg-card-hover); }
+        .fish-icon { font-size: 22px; flex-shrink: 0; }
+        .fish-info { flex: 1; min-width: 0; }
+        .fish-name { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+        .fish-meta { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
+        .fish-depth-badge {
+            font-size: 9px; font-weight: 600;
+            padding: 3px 8px; border-radius: 10px;
+            white-space: nowrap;
+        }
+        .fish-depth-badge.surface { background: rgba(6,182,212,0.15); color: #22d3ee; border: 1px solid rgba(6,182,212,0.3); }
+        .fish-depth-badge.mid { background: rgba(14,165,233,0.15); color: #38bdf8; border: 1px solid rgba(14,165,233,0.3); }
+        .fish-depth-badge.deep { background: rgba(99,102,241,0.15); color: #818cf8; border: 1px solid rgba(99,102,241,0.3); }
+        .fish-zone-label { font-size: 10px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin: 10px 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes toastOut {
+            from { opacity: 1; transform: translateX(0); }
+            to { opacity: 0; transform: translateX(20px); }
+        }
+
+        @media (max-width: 900px) {
+            .main-container { flex-direction: column; }
+            .map-panel { height: 45vh; }
+            .side-panel { 
+                width: 100%; height: 55vh; 
+                border-left: none; border-top: 1px solid var(--border);
+                border-radius: 16px 16px 0 0;
+                position: relative;
+            }
+            .side-panel::before {
+                content: ''; position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+                width: 40px; height: 4px; border-radius: 2px;
+                background: var(--text-muted); opacity: 0.4; z-index: 10;
+            }
+            .preset-chips { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+            .preset-chip { flex-shrink: 0; }
+            .header h1 { font-size: 15px; }
+            .header .subtitle { display: none; }
+            .header-right .badge:not(.live) { display: none; }
+        }
+        @media (max-width: 600px) {
+            .form-row { grid-template-columns: 1fr; }
+            .info-grid { grid-template-columns: 1fr 1fr; }
+            .side-panel { padding: 10px; }
+        }
+
+        /* ── Onboarding Overlay ── */
+        .onboarding-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(6, 13, 31, 0.85); backdrop-filter: blur(8px);
+            z-index: 10000; display: flex; align-items: center; justify-content: center;
+            animation: fadeIn 0.4s ease;
+        }
+        .onboarding-overlay.hidden { display: none; }
+        .onboarding-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 16px; padding: 32px 28px; max-width: 380px; width: 90%;
+            text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            animation: slideUp 0.5s ease;
+        }
+        .onboarding-icon { font-size: 48px; margin-bottom: 12px; }
+        .onboarding-card h2 { font-size: 20px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
+        .onboarding-card > p { font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; }
+        .onboarding-steps { text-align: left; margin-bottom: 20px; }
+        .onboard-step {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 0; font-size: 13px; color: var(--text-secondary);
+            border-bottom: 1px solid rgba(26,45,82,0.5);
+        }
+        .onboard-step:last-child { border-bottom: none; }
+        .onboard-num {
+            width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+            background: var(--gradient-accent); color: #fff;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 10px; font-weight: 700;
+        }
+        .onboard-btn {
+            width: 100%; padding: 12px; border: none; border-radius: 10px;
+            background: var(--gradient-accent); color: #fff;
+            font-size: 14px; font-weight: 600; cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .onboard-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(6,182,212,0.3); }
+        .onboard-check { display: block; margin-top: 12px; font-size: 11px; color: var(--text-muted); cursor: pointer; }
+        .onboard-check input { margin-right: 4px; vertical-align: middle; }
+
+        /* ── Animations ── */
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+        .map-pulse-dot {
+            width: 12px; height: 12px; border-radius: 50%;
+            background: var(--accent); animation: pulse 2s ease-in-out infinite;
+            box-shadow: 0 0 12px rgba(6,182,212,0.5);
+        }
+
+        /* ── Section accent borders ── */
+        .panel-section h3 {
+            border-left: 3px solid var(--accent);
+            padding-left: 10px;
+            border-radius: 0 2px 2px 0;
+        }
+
+        /* ── Results entrance animation ── */
+        .panel-section.fade-in { animation: slideUp 0.4s ease; }
+
+        /* ── Leaflet zoom control styling ── */
+        .leaflet-control-zoom a {
+            background: var(--bg-card) !important; color: var(--text-primary) !important;
+            border: 1px solid var(--border) !important;
+        }
+        .leaflet-control-zoom a:hover { background: var(--bg-card-hover) !important; }
+        .leaflet-control-zoom { border: 1px solid var(--border) !important; border-radius: 8px !important; overflow: hidden; }
+
+        /* ── Domain border pulse ── */
+        @keyframes borderPulse {
+            0%, 100% { opacity: 0.5; } 50% { opacity: 0.9; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Onboarding Overlay -->
+    <div class="onboarding-overlay" id="onboardingOverlay">
+        <div class="onboarding-card">
+            <div class="onboarding-icon">🌊</div>
+            <h2>Welcome to OceanEmbed</h2>
+            <p>Explore subsurface ocean temperatures across the North Indian Ocean</p>
+            <div class="onboarding-steps">
+                <div class="onboard-step"><span class="onboard-num">1</span>Click anywhere on the ocean map</div>
+                <div class="onboard-step"><span class="onboard-num">2</span>Enter surface satellite data or use a preset</div>
+                <div class="onboard-step"><span class="onboard-num">3</span>Click "Reconstruct Subsurface Profile"</div>
+                <div class="onboard-step"><span class="onboard-num">4</span>View temperature profiles & fish forecast</div>
+            </div>
+            <button class="onboard-btn" onclick="dismissOnboarding()">Get Started</button>
+            <label class="onboard-check"><input type="checkbox" id="onboardDontShow"> Don't show again</label>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <div class="header">
+        <div class="header-left">
+            <div>
+                <h1>OceanEmbed</h1>
+                <div class="subtitle">Satellite Embedding-Based Subsurface Ocean Temperature Reconstruction</div>
+            </div>
+        </div>
+        <div class="header-right">
+            <span class="badge">SIH26066</span>
+            <span class="badge">Team Neural Shadows</span>
+            <span class="badge live">Offline Mode</span>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="map-panel">
+            <div id="map"></div>
+            <div class="map-click-hint" id="mapClickHint">Click anywhere on the ocean to select location</div>
+            <div class="loading-overlay" id="loadingOverlay">
+                <div class="spinner"></div>
+                <div class="loading-text">Loading model &amp; data...</div>
+            </div>
+        </div>
+
+        <div class="side-panel">
+            <!-- Tab Bar -->
+            <div class="tab-bar">
+                <div class="tab-btn active" data-tab="live" onclick="switchTab('live')" title="Enter surface data and run live AI prediction">Live Input</div>
+                <div class="tab-btn" data-tab="precomputed" onclick="switchTab('precomputed')" title="Browse pre-computed results for 2024">Precomputed 2024</div>
+            </div>
+
+            <!-- ==================== LIVE INPUT TAB ==================== -->
+            <div class="tab-content active" id="tab-live">
+
+                <!-- Surface Data Form -->
+                <div class="panel-section">
+                    <h3>Enter Surface Satellite Data</h3>
+
+                    <div class="preset-chips">
+                        <span class="preset-chip" onclick="loadPreset('arabian_summer')" title="Summer conditions in Arabian Sea (29.5°C SST, eastward winds)">Arabian Sea (Summer)</span>
+                        <span class="preset-chip" onclick="loadPreset('bob_monsoon')" title="Monsoon conditions in Bay of Bengal (28°C SST, strong SW winds)">Bay of Bengal (Monsoon)</span>
+                        <span class="preset-chip" onclick="loadPreset('cyclone')" title="Favorable zone for cyclone formation (30.2°C SST, elevated SSH)">Cyclone Zone</span>
+                        <span class="preset-chip" onclick="loadPreset('cold_upwelling')" title="Cold upwelling zone off Oman coast (24°C SST)">Cold Upwelling</span>
+                        <span class="preset-chip" onclick="loadPreset('amphan')" title="Cyclone Amphan - May 2020, Category 5, Bay of Bengal">Amphan</span>
+                        <span class="preset-chip" onclick="loadPreset('fani')" title="Cyclone Fani - May 2019, Category 4, Odisha coast">Fani</span>
+                        <span class="preset-chip" onclick="loadPreset('biparjoy')" title="Cyclone Biparjoy - Jun 2023, Category 1, Gujarat coast">Biparjoy</span>
+                        <span class="preset-chip" onclick="loadPreset('Michaung')" title="Cyclone Michaung - Dec 2023, Category 1, Chennai">Michaung</span>
+                        <span class="preset-chip" onclick="loadPreset('tauktae')" title="Cyclone Tauktae - May 2021, Category 4, Gujarat coast">Tauktae</span>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Latitude (°N)</label>
+                            <input type="number" class="form-input" id="inputLat" value="15.0" min="0" max="25" step="0.25">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Longitude (°E)</label>
+                            <input type="number" class="form-input" id="inputLon" value="76.0" min="45" max="100" step="0.25">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Sea Surface Temperature (SST)</label>
+                        <span class="form-sublabel">Typical range: 24–30°C for North Indian Ocean</span>
+                        <input type="number" class="form-input" id="inputSST" value="28.5" step="0.1" placeholder="e.g. 28.5">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Sea Surface Height (SSH)</label>
+                            <span class="form-sublabel">Sea Level Anomaly in meters</span>
+                            <input type="number" class="form-input" id="inputSSH" value="0.0" step="0.01" placeholder="e.g. 0.3">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Sea Surface Salinity (SSS)</label>
+                            <span class="form-sublabel">PSU, typical: 32–36</span>
+                            <input type="number" class="form-input" id="inputSSS" value="34.0" step="0.1" placeholder="e.g. 34.0">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Wind U (East-West)</label>
+                            <span class="form-sublabel">m/s, positive = eastward</span>
+                            <input type="number" class="form-input" id="inputWindU" value="0.0" step="0.1" placeholder="e.g. -2.0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Wind V (North-South)</label>
+                            <span class="form-sublabel">m/s, positive = northward</span>
+                            <input type="number" class="form-input" id="inputWindV" value="0.0" step="0.1" placeholder="e.g. 3.5">
+                        </div>
+                    </div>
+
+                    <button class="predict-btn" id="predictBtn" onclick="runPrediction()" title="Run the AI model to reconstruct temperature at each depth">
+                        Reconstruct Subsurface Profile
+                    </button>
+                </div>
+
+                <!-- Live Results -->
+                <div class="panel-section" id="liveResults" style="display:none;">
+                    <div class="result-header">
+                        <h3 style="margin-bottom:0;">Reconstructed Profile</h3>
+                        <span class="result-badge">LIVE INFERENCE</span>
+                    </div>
+                    <div id="liveLocationInfo" style="font-size:11px; color:var(--text-secondary); margin-bottom:6px;"></div>
+                    <div class="chart-container">
+                        <canvas id="liveProfileChart"></canvas>
+                    </div>
+                    <div class="legend">
+                        <span>Cold</span>
+                        <div class="legend-bar"></div>
+                        <span>Warm</span>
+                    </div>
+                </div>
+
+                <!-- Live Indicators -->
+                <div class="panel-section" id="liveIndicators" style="display:none;">
+                    <h3>Ocean Indicators</h3>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">SST</div>
+                            <div class="info-value" id="liveSST">-- <span class="info-unit">°C</span></div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">OHC (0-200m)</div>
+                            <div class="info-value" id="liveOHC">-- <span class="info-unit">kJ/cm²</span></div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Thermocline</div>
+                            <div class="info-value" id="liveThermo">-- <span class="info-unit">m</span></div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">MHW Intensity</div>
+                            <div class="info-value" id="liveMHW">--</div>
+                        </div>
+                    </div>
+                    <div id="liveMHWStatus" class="status-bar safe">
+                        <div class="status-dot safe"></div>
+                        <span>Normal conditions</span>
+                    </div>
+                    <div id="liveCycloneStatus" class="status-bar safe">
+                        <div class="status-dot safe"></div>
+                        <span>Cyclone risk: Low</span>
+                    </div>
+                </div>
+
+                <!-- Fish Forecast -->
+                <div class="panel-section" id="liveFishForecast" style="display:none;">
+                    <div class="result-header">
+                        <h3 style="margin-bottom:0;">Fish Forecast</h3>
+                        <span class="result-badge" style="background:rgba(16,185,129,0.15);border-color:rgba(16,185,129,0.3);color:#10b981;">FISHERMAN AID</span>
+                    </div>
+                    <div id="fishDepthChart" style="height:220px;position:relative;margin-bottom:12px;">
+                        <canvas id="fishChart"></canvas>
+                    </div>
+                    <div id="fishSpeciesList"></div>
+                </div>
+            </div>
+
+            <!-- ==================== PRECOMPUTED TAB ==================== -->
+            <div class="tab-content" id="tab-precomputed">
+                <!-- Map Overlay Selector -->
+                <div class="panel-section">
+                    <h3>Map Overlay</h3>
+                    <div class="overlay-toggle" style="display:flex;gap:4px;flex-wrap:wrap;">
+                        <button class="overlay-btn active" data-overlay="" onclick="setOverlay(null)">None</button>
+                        <button class="overlay-btn" data-overlay="sst" onclick="setOverlay('sst')">SST</button>
+                        <button class="overlay-btn" data-overlay="ohc" onclick="setOverlay('ohc')">OHC</button>
+                        <button class="overlay-btn" data-overlay="anomaly" onclick="setOverlay('anomaly')">Anomaly</button>
+                    </div>
+                    <div class="legend" id="overlayLegend" style="display:none;">
+                        <span>Low</span>
+                        <div class="legend-bar"></div>
+                        <span>High</span>
+                    </div>
+                </div>
+
+                <!-- Date Selection -->
+                <div class="panel-section">
+                    <h3>Select Date</h3>
+                    <div class="month-tabs" id="monthTabs"></div>
+                    <div class="date-selector" id="dateSelector"></div>
+                </div>
+
+                <!-- Location Selection -->
+                <div class="panel-section">
+                    <h3>Locations</h3>
+                    <div class="location-list" id="locationList"></div>
+                </div>
+
+                <!-- Temperature Profile -->
+                <div class="panel-section">
+                    <h3>Temperature vs Depth Profile</h3>
+                    <div id="locationInfo" style="font-size:11px; color:var(--text-secondary); margin-bottom:6px;">
+                        Select a location on the map or from the list above
+                    </div>
+                    <div id="argoCompareNote" style="display:none; font-size:10px; color:var(--safe); margin-bottom:6px; padding:4px 8px; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.2); border-radius:4px;">
+                        ✓ Real ARGO observation available — showing comparison
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="profileChart"></canvas>
+                    </div>
+                    <div class="legend">
+                        <span>Cold</span>
+                        <div class="legend-bar"></div>
+                        <span>Warm</span>
+                    </div>
+                    <div id="argoRMSE" style="display:none; font-size:10px; color:var(--text-secondary); margin-top:6px; text-align:center;"></div>
+                </div>
+
+                <!-- Ocean Indicators -->
+                <div class="panel-section">
+                    <h3>Ocean Indicators</h3>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">SST</div>
+                            <div class="info-value" id="sstValue">-- <span class="info-unit">°C</span></div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">OHC (0-200m)</div>
+                            <div class="info-value" id="ohcValue">-- <span class="info-unit">kJ/cm²</span></div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Thermocline</div>
+                            <div class="info-value" id="thermoDepth">-- <span class="info-unit">m</span></div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Max MHW Intensity</div>
+                            <div class="info-value" id="mhwIntensity">--</div>
+                        </div>
+                    </div>
+                    <div id="mhwStatus" class="status-bar safe">
+                        <div class="status-dot safe"></div>
+                        <span>Normal conditions</span>
+                    </div>
+                    <div id="cycloneStatus" class="status-bar safe">
+                        <div class="status-dot safe"></div>
+                        <span>Cyclone risk: Low</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==================== SHARED BOTTOM ==================== -->
+            <!-- Validation Info -->
+            <div class="panel-section">
+                <h3>Model Performance</h3>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-label">Argo RMSE</div>
+                        <div class="info-value">1.02 <span class="info-unit">°C</span></div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Argo Corr</div>
+                        <div class="info-value">0.83</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">GLORYS R²</div>
+                        <div class="info-value">0.989</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Depth Levels</div>
+                        <div class="info-value">15</div>
+                    </div>
+                </div>
+                <div class="validation-badge">Validated against 56,925 INCOIS Argo observations</div>
+            </div>
+
+            <!-- How It Works -->
+            <div class="panel-section">
+                <h3>How It Works</h3>
+                <div class="flow-step">
+                    <div class="flow-num">1</div>
+                    <span>Satellite surface data (SST, SSH, SSS, Winds)</span>
+                </div>
+                <div class="flow-arrow">&darr;</div>
+                <div class="flow-step">
+                    <div class="flow-num">2</div>
+                    <span>Attention-Enhanced 3D U-Net++ with CBAM</span>
+                </div>
+                <div class="flow-arrow">&darr;</div>
+                <div class="flow-step">
+                    <div class="flow-num">3</div>
+                    <span>Reconstructs 15 depth levels (0–450m)</span>
+                </div>
+                <div class="flow-arrow">&darr;</div>
+                <div class="flow-step">
+                    <div class="flow-num">4</div>
+                    <span>OHC &amp; Marine Heatwave Detection</span>
+                </div>
+                <div class="flow-arrow">&darr;</div>
+                <div class="flow-step">
+                    <div class="flow-num">5</div>
+                    <span>Cyclone intensification risk assessment</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ==================== GLOBAL STATE ====================
+    let demoData = null;
+    let map, profileChart, liveProfileChart;
+    let selectedDate = null;
+    let selectedLocation = null;
+    let locationMarkers = {};
+    let activeTab = 'live';
+    let mapClickCount = 0;
+
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    const DEPTH_LEVELS = [0, 5, 10, 20, 30, 50, 75, 100, 125, 150, 200, 250, 300, 400, 450];
+
+    const PRESETS = {
+        arabian_summer: { lat: 15.0, lon: 65.0, sst: 29.5, ssh: 0.2, sss: 35.5, wind_u: 3.0, wind_v: -2.0, label: 'Arabian Sea Summer' },
+        bob_monsoon:    { lat: 15.0, lon: 88.0, sst: 28.0, ssh: -0.1, sss: 33.0, wind_u: -4.0, wind_v: 5.0, label: 'Bay of Bengal Monsoon' },
+        cyclone:        { lat: 12.0, lon: 85.0, sst: 30.2, ssh: 0.5, sss: 34.0, wind_u: -1.5, wind_v: 2.0, label: 'Cyclone Favorable Zone' },
+        cold_upwelling: { lat: 10.0, lon: 58.0, sst: 24.0, ssh: -0.3, sss: 36.0, wind_u: 5.0, wind_v: -3.0, label: 'Oman Upwelling' },
+        amphan:    { lat: 17.5, lon: 87.0, sst: 31.0, ssh: 0.45, sss: 33.2, wind_u: -6.0, wind_v: 8.0, label: 'Cyclone Amphan (May 2020, Cat 5)' },
+        fani:      { lat: 17.0, lon: 85.5, sst: 30.8, ssh: 0.38, sss: 33.5, wind_u: -5.5, wind_v: 7.0, label: 'Cyclone Fani (May 2019, Cat 4)' },
+        biparjoy:  { lat: 22.5, lon: 66.0, sst: 30.0, ssh: 0.30, sss: 35.8, wind_u: -3.0, wind_v: -5.0, label: 'Cyclone Biparjoy (Jun 2023, Cat 1)' },
+        Michaung:  { lat: 13.0, lon: 80.5, sst: 29.5, ssh: 0.25, sss: 33.8, wind_u: -4.0, wind_v: 3.0, label: 'Cyclone Michaung (Dec 2023, Cat 1)' },
+        tauktae:   { lat: 21.0, lon: 68.5, sst: 30.5, ssh: 0.40, sss: 35.5, wind_u: -4.5, wind_v: -6.0, label: 'Cyclone Tauktae (May 2021, Cat 4)' },
+    };
+
+    // ==================== DOMAIN ====================
+    const DOMAIN = { lat_min: 0, lat_max: 25, lon_min: 45, lon_max: 100 };
+
+    function isInDomain(lat, lon) {
+        return lat >= DOMAIN.lat_min && lat <= DOMAIN.lat_max &&
+               lon >= DOMAIN.lon_min && lon <= DOMAIN.lon_max;
+    }
+
+    // ==================== LAND MASK ====================
+    // Simplified coastline polygons for North Indian Ocean region
+    var LAND_POLYGONS = [
+        // India (simplified outline)
+        [[6.5,77],[7.5,77.5],[8,77],[9,76.5],[10,76],[11,75.5],[12,75],[13,74.5],[14,74],[15,73.5],[16,73],[17,73],[18,72.5],[19,72.5],[20,72.5],[21,72],[22,70],[23,68.5],[24,68],[25,69],[26,70],[27,71],[28,72],[29,73],[30,74],[31,75],[32,76],[33,77],[34,78],[35,80],[35,82],[34,84],[33,85],[32,86],[30,87],[28,88],[26,89],[25,89.5],[24,90],[23,90],[22,89],[21,88],[20,87],[19,87],[18,86],[17,85],[16,84],[15,83],[14,82],[13,81],[12,80.5],[11,80],[10,79.5],[9,79],[8,78.5],[7,78],[6.5,77]],
+        // Sri Lanka
+        [[6,80],[6.5,80],[7,79.8],[8,79.8],[9,80],[9.5,80.5],[10,80.2],[9.8,80.8],[9,81],[8,81.2],[7,81],[6.5,80.8],[6,80]],
+        // Arabian Peninsula (simplified)
+        [[12.5,43],[13,45],[14,48],[15,51],[16,53],[17,56],[18,56],[19,57],[20,58.5],[21,59],[22,59.5],[23,59],[24,58],[25,56.5],[26,56],[27,56],[28,57],[29,58],[30,58],[30,56],[29,54],[28,52],[27,50],[26,49],[25,48],[24,46],[23,45],[22,43.5],[21,42],[20,41],[19,41],[18,42],[17,42.5],[16,43],[15,43.5],[14,43.5],[13,43],[12.5,43]],
+        // Horn of Africa
+        [[-2,42],[0,42.5],[2,43],[4,44],[5,46],[6,48],[7,49.5],[8,50],[9,51],[10,51],[11,51],[11.5,50],[11,49],[10,48],[9,47],[8,46],[7,45],[6,44],[5,43],[4,42],[3,41.5],[2,41.5],[1,42],[0,42],[-1,42],[-2,42]],
+        // Myanmar / SE Asia coast
+        [[10,92],[11,92.5],[12,93],[13,93.5],[14,94],[15,94.5],[16,95],[17,96],[18,96.5],[19,97],[20,97.5],[21,97.5],[22,97],[23,97],[24,97.5],[25,98],[26,98.5],[27,97],[28,97],[27,96],[26,95.5],[25,95],[24,94.5],[23,94],[22,93.5],[21,93],[20,92.5],[19,92],[18,91.5],[17,91.5],[16,92],[15,92.5],[14,93],[13,93.5],[12,94],[11,93.5],[10,93],[10,92]],
+    ];
+
+    function pointInPolygon(lat, lon, polygon) {
+        var inside = false;
+        for (var i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+            var yi = polygon[i][0], xi = polygon[i][1];
+            var yj = polygon[j][0], xj = polygon[j][1];
+            if (((yi > lat) !== (yj > lat)) && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi)) {
+                inside = !inside;
+            }
+        }
+        return inside;
+    }
+
+    function isOcean(lat, lon) {
+        return true;
+    }
+
+    // ==================== FISH SPECIES DATABASE ====================
+    var FISH_DB = [
+        // Surface (0-30m) — warm water species
+        { name: 'Yellowfin Tuna', icon: '🐟', depthMin: 0, depthMax: 100, tempMin: 22, tempMax: 31, zone: 'surface', value: 'High commercial value', season: 'Oct-Mar' },
+        { name: 'Skipjack Tuna', icon: '🐟', depthMin: 0, depthMax: 60, tempMin: 24, tempMax: 30, zone: 'surface', value: 'High commercial value', season: 'Jun-Oct' },
+        { name: 'Mahi-Mahi (Dolphinfish)', icon: '🐠', depthMin: 0, depthMax: 40, tempMin: 24, tempMax: 30, zone: 'surface', value: 'Moderate value', season: 'Sep-Mar' },
+        { name: 'Flying Fish', icon: '🐟', depthMin: 0, depthMax: 20, tempMin: 23, tempMax: 30, zone: 'surface', value: 'Moderate value', season: 'Oct-Feb' },
+        { name: 'Indian Mackerel', icon: '🐟', depthMin: 0, depthMax: 50, tempMin: 22, tempMax: 29, zone: 'surface', value: 'High demand local', season: 'Jun-Sep' },
+        { name: 'Sardines (Oil Sardine)', icon: '🐟', depthMin: 0, depthMax: 40, tempMin: 22, tempMax: 28, zone: 'surface', value: 'High demand local', season: 'Jun-Nov' },
+        { name: 'Anchovies', icon: '🐟', depthMin: 0, depthMax: 30, tempMin: 22, tempMax: 29, zone: 'surface', value: 'Moderate value', season: 'May-Oct' },
+        { name: 'Barracuda', icon: '🐟', depthMin: 5, depthMax: 50, tempMin: 22, tempMax: 30, zone: 'surface', value: 'Good value', season: 'Oct-Apr' },
+        { name: 'Queenfish', icon: '🐠', depthMin: 5, depthMax: 40, tempMin: 24, tempMax: 30, zone: 'surface', value: 'Moderate value', season: 'Nov-Mar' },
+
+        // Mid-water (30-150m) — transitional zone
+        { name: 'Swordfish', icon: '🗡️', depthMin: 50, depthMax: 300, tempMin: 15, tempMax: 28, zone: 'mid', value: 'Very high value', season: 'Nov-Mar' },
+        { name: 'Marlin (Black)', icon: '🗡️', depthMin: 40, depthMax: 250, tempMin: 18, tempMax: 28, zone: 'mid', value: 'Premium value', season: 'Oct-Mar' },
+        { name: 'Sailfish', icon: '🗡️', depthMin: 30, depthMax: 200, tempMin: 20, tempMax: 28, zone: 'mid', value: 'Premium value', season: 'Nov-Mar' },
+        { name: 'Bigeye Tuna', icon: '🐟', depthMin: 50, depthMax: 250, tempMin: 15, tempMax: 27, zone: 'mid', value: 'Very high value', season: 'Nov-Apr' },
+        { name: 'Threadfin Bream', icon: '🐠', depthMin: 30, depthMax: 150, tempMin: 16, tempMax: 26, zone: 'mid', value: 'Good value', season: 'Oct-Mar' },
+        { name: 'Emperor Bream', icon: '🐠', depthMin: 40, depthMax: 180, tempMin: 16, tempMax: 26, zone: 'mid', value: 'Good value', season: 'Nov-Mar' },
+        { name: 'Cobia', icon: '🐟', depthMin: 20, depthMax: 120, tempMin: 18, tempMax: 30, zone: 'mid', value: 'High value', season: 'Oct-Feb' },
+
+        // Deep (150-450m) — deep water species
+        { name: 'Deep-sea Red Snapper', icon: '🐠', depthMin: 100, depthMax: 400, tempMin: 8, tempMax: 20, zone: 'deep', value: 'High value', season: 'Year-round' },
+        { name: 'Orange Roughy', icon: '🐠', depthMin: 200, depthMax: 450, tempMin: 6, tempMax: 12, zone: 'deep', value: 'Premium value', season: 'Year-round' },
+        { name: 'Deep-sea Shrimp', icon: '🦐', depthMin: 150, depthMax: 400, tempMin: 6, tempMax: 16, zone: 'deep', value: 'Very high value', season: 'Nov-Feb' },
+        { name: 'Rattail (Grenadier)', icon: '🐟', depthMin: 200, depthMax: 450, tempMin: 4, tempMax: 10, zone: 'deep', value: 'Moderate value', season: 'Year-round' },
+        { name: 'Deep-sea Squid', icon: '🦑', depthMin: 150, depthMax: 400, tempMin: 6, tempMax: 15, zone: 'deep', value: 'High value', season: 'Oct-Mar' },
+    ];
+
+    function matchFishes(depths, temps) {
+        var matched = [];
+        for (var i = 0; i < FISH_DB.length; i++) {
+            var fish = FISH_DB[i];
+            var bestTemp = null;
+            for (var j = 0; j < depths.length; j++) {
+                if (depths[j] >= fish.depthMin && depths[j] <= fish.depthMax) {
+                    if (bestTemp === null || Math.abs(temps[j] - ((fish.tempMin + fish.tempMax) / 2)) < Math.abs(bestTemp - ((fish.tempMin + fish.tempMax) / 2))) {
+                        bestTemp = temps[j];
+                    }
+                }
+            }
+            if (bestTemp !== null && bestTemp >= fish.tempMin && bestTemp <= fish.tempMax) {
+                matched.push(fish);
+            }
+        }
+        return matched;
+    }
+
+    function renderFishForecast(depths, temps) {
+        var matched = matchFishes(depths, temps);
+        var container = document.getElementById('fishSpeciesList');
+        if (!container) return;
+
+        if (matched.length === 0) {
+            container.innerHTML = '<div style="color:var(--text-muted);font-size:12px;text-align:center;padding:16px;">No fish species matched current conditions at this location.</div>';
+            return;
+        }
+
+        var zones = { surface: [], mid: [], deep: [] };
+        for (var i = 0; i < matched.length; i++) {
+            zones[matched[i].zone].push(matched[i]);
+        }
+
+        var html = '';
+        var zoneLabels = { surface: 'Surface Zone (0–30m)', mid: 'Mid-Water Zone (30–150m)', deep: 'Deep Zone (150–450m)' };
+        var zoneIcons = { surface: '🌊', mid: '🌀', deep: '🌑' };
+        var zoneBadgeClass = { surface: 'surface', mid: 'mid', deep: 'deep' };
+
+        ['surface', 'mid', 'deep'].forEach(function(zone) {
+            if (zones[zone].length === 0) return;
+            html += '<div class="fish-zone-label">' + zoneIcons[zone] + ' ' + zoneLabels[zone] + '</div>';
+            zones[zone].forEach(function(fish) {
+                html += '<div class="fish-card">' +
+                    '<div class="fish-icon">' + fish.icon + '</div>' +
+                    '<div class="fish-info">' +
+                        '<div class="fish-name">' + fish.name + '</div>' +
+                        '<div class="fish-meta">' + fish.value + ' · Season: ' + fish.season + '</div>' +
+                    '</div>' +
+                    '<div class="fish-depth-badge ' + zoneBadgeClass[zone] + '">' + fish.depthMin + '–' + fish.depthMax + 'm</div>' +
+                '</div>';
+            });
+        });
+
+        container.innerHTML = html;
+
+        // Render fish depth chart
+        var ctx = document.getElementById('fishChart').getContext('2d');
+        if (window.fishChartInstance) window.fishChartInstance.destroy();
+
+        var datasets = [];
+        var zoneColors = { surface: 'rgba(6,182,212,0.6)', mid: 'rgba(14,165,233,0.6)', deep: 'rgba(99,102,241,0.6)' };
+        var zoneBg = { surface: 'rgba(6,182,212,0.08)', mid: 'rgba(14,165,233,0.08)', deep: 'rgba(99,102,241,0.08)' };
+
+        ['surface', 'mid', 'deep'].forEach(function(zone) {
+            if (zones[zone].length === 0) return;
+            zones[zone].forEach(function(fish) {
+                datasets.push({
+                    label: fish.name,
+                    data: [{ x: fish.tempMin, y: fish.depthMin }, { x: fish.tempMax, y: fish.depthMax }],
+                    borderColor: zoneColors[zone],
+                    backgroundColor: zoneBg[zone],
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    pointBackgroundColor: zoneColors[zone],
+                    showLine: true,
+                    fill: false,
+                    tension: 0,
+                });
+            });
+        });
+
+        // Add temperature profile line
+        datasets.push({
+            label: 'Water Temp Profile',
+            data: temps.map(function(t, i) { return { x: t, y: depths[i] }; }),
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245,158,11,0.1)',
+            borderWidth: 3,
+            pointRadius: 4,
+            pointBackgroundColor: '#f59e0b',
+            pointBorderColor: '#060d1f',
+            pointBorderWidth: 2,
+            fill: false,
+            tension: 0.4,
+            borderDash: [],
+        });
+
+        window.fishChartInstance = new Chart(ctx, {
+            type: 'scatter',
+            data: { datasets: datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Temperature (°C)', color: '#8faec8', font: { size: 10, family: "'Inter', sans-serif" } },
+                        grid: { color: 'rgba(6,182,212,0.08)' },
+                        ticks: { color: '#8faec8', font: { size: 9 } },
+                        reverse: true,
+                    },
+                    y: {
+                        title: { display: true, text: 'Depth (m)', color: '#8faec8', font: { size: 10, family: "'Inter', sans-serif" } },
+                        grid: { color: 'rgba(6,182,212,0.08)' },
+                        ticks: { color: '#8faec8', font: { size: 9 } },
+                        reverse: true,
+                        min: 0,
+                    },
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                return ctx.dataset.label + ': ' + ctx.parsed.x.toFixed(1) + '°C at ' + ctx.parsed.y + 'm';
+                            }
+                        }
+                    }
+                },
+                interaction: { intersect: false, mode: 'nearest' },
+            },
+        });
+    }
+
+    // ==================== TOAST SYSTEM ====================
+    function showToast(message, type) {
+        type = type || 'info';
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = 'toast ' + type;
+        const dotClass = type === 'error' ? 'toast-dot error' : 'toast-dot info';
+        toast.innerHTML = '<span class="' + dotClass + '"></span>' + message;
+        container.appendChild(toast);
+        setTimeout(function() {
+            toast.classList.add('fade-out');
+            setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 300);
+        }, 3000);
+    }
+
+    // ==================== TAB SWITCHING ====================
+    function switchTab(tab) {
+        activeTab = tab;
+        document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.tab === tab); });
+        document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+        document.getElementById('tab-' + tab).classList.add('active');
+    }
+
+    // ==================== PRESETS ====================
+    function loadPreset(key) {
+        var p = PRESETS[key];
+        if (!p) return;
+        document.getElementById('inputLat').value = p.lat;
+        document.getElementById('inputLon').value = p.lon;
+        document.getElementById('inputSST').value = p.sst;
+        document.getElementById('inputSSH').value = p.ssh;
+        document.getElementById('inputSSS').value = p.sss;
+        document.getElementById('inputWindU').value = p.wind_u;
+        document.getElementById('inputWindV').value = p.wind_v;
+        showToast('Loaded: ' + p.label, 'info');
+    }
+
+    // ==================== LIVE PREDICTION ====================
+    let apiAvailable = null;
+
+    async function checkApiAvailability() {
+        try {
+            var resp = await fetch('/api/info', { method: 'GET' });
+            apiAvailable = resp.ok;
+        } catch (e) {
+            apiAvailable = false;
+        }
+        if (!apiAvailable) {
+            var btn = document.getElementById('predictBtn');
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Live inference unavailable (static mode)';
+                btn.title = 'Run "python run.py demo" for live AI prediction. Static server only serves precomputed data.';
+            }
+            var hint = document.createElement('div');
+            hint.style.cssText = 'font-size:10px;color:var(--warning);margin-top:8px;padding:6px 10px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:6px;';
+            hint.innerHTML = 'Static mode detected. Live inference needs the FastAPI backend (<code>python run.py demo</code>). Precomputed tab works fully offline.';
+            if (btn && btn.parentNode) btn.parentNode.appendChild(hint);
+        }
+        return apiAvailable;
+    }
+
+    async function runPrediction() {
+        if (apiAvailable === false) {
+            showToast('Live inference unavailable in static mode. Use Precomputed tab.', 'error');
+            return;
+        }
+        var btn = document.getElementById('predictBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-sm"></span> Running inference...';
+
+        var payload = {
+            latitude: parseFloat(document.getElementById('inputLat').value),
+            longitude: parseFloat(document.getElementById('inputLon').value),
+            sst: parseFloat(document.getElementById('inputSST').value),
+            ssh: parseFloat(document.getElementById('inputSSH').value),
+            sss: parseFloat(document.getElementById('inputSSS').value),
+            wind_u: parseFloat(document.getElementById('inputWindU').value),
+            wind_v: parseFloat(document.getElementById('inputWindV').value),
+        };
+
+        try {
+            var resp = await fetch('/api/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            var text = await resp.text();
+            var result;
+            try {
+                result = JSON.parse(text);
+            } catch (parseErr) {
+                throw new Error('Server returned non-JSON response. Is the backend running with uvicorn? Response: ' + text.substring(0, 200));
+            }
+
+            if (!resp.ok) {
+                throw new Error(result.detail || 'Prediction failed (status ' + resp.status + ')');
+            }
+
+            renderLiveResults(result);
+        } catch (e) {
+            console.error('Prediction error:', e);
+            showToast('Prediction failed: ' + e.message, 'error');
+            apiAvailable = false;
+        } finally {
+            btn.disabled = apiAvailable === false;
+            btn.innerHTML = apiAvailable === false ? 'Live inference unavailable (static mode)' : 'Reconstruct Subsurface Profile';
+        }
+    }
+
+    function renderLiveResults(result) {
+        document.getElementById('liveResults').style.display = 'block';
+        document.getElementById('liveResults').classList.add('fade-in');
+        document.getElementById('liveIndicators').style.display = 'block';
+        document.getElementById('liveIndicators').classList.add('fade-in');
+        document.getElementById('liveFishForecast').style.display = 'block';
+        document.getElementById('liveFishForecast').classList.add('fade-in');
+
+        var loc = document.getElementById('liveLocationInfo');
+        loc.textContent = 'Location: ' + result.latitude.toFixed(2) + '°N, ' + result.longitude.toFixed(2) + '°E | Source: Live Model Inference';
+
+        // Chart
+        var ctx = document.getElementById('liveProfileChart').getContext('2d');
+        if (liveProfileChart) liveProfileChart.destroy();
+
+        liveProfileChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: result.depths.map(function(d) { return d + 'm'; }),
+                datasets: [{
+                    label: 'Temperature (°C)',
+                    data: result.temperature,
+                    borderColor: '#06b6d4',
+                    backgroundColor: function(context) {
+                        var chart = context.chart;
+                        var ctx2 = chart.ctx;
+                        var area = chart.chartArea;
+                        if (!area) return 'rgba(6, 182, 212, 0.08)';
+                        var gradient = ctx2.createLinearGradient(area.left, area.top, area.left, area.bottom);
+                        gradient.addColorStop(0, 'rgba(6, 182, 212, 0.2)');
+                        gradient.addColorStop(1, 'rgba(6, 182, 212, 0.02)');
+                        return gradient;
+                    },
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#06b6d4',
+                    pointBorderColor: '#060d1f',
+                    pointBorderWidth: 2,
+                    borderWidth: 2.5,
+                    pointHoverRadius: 6,
+                    pointHoverBackgroundColor: '#22d3ee',
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Temperature (°C)', color: '#8faec8', font: { size: 11, family: "'Inter', sans-serif" } },
+                        grid: { color: 'rgba(6, 182, 212, 0.08)', drawBorder: false },
+                        ticks: { color: '#8faec8', font: { size: 10, family: "'Inter', sans-serif" } },
+                    },
+                    y: {
+                        title: { display: true, text: 'Depth', color: '#8faec8', font: { size: 11, family: "'Inter', sans-serif" } },
+                        reverse: true,
+                        grid: { color: 'rgba(6, 182, 212, 0.08)', drawBorder: false },
+                        ticks: { color: '#8faec8', font: { size: 10, family: "'Inter', sans-serif" } },
+                    },
+                },
+                plugins: { legend: { display: false } },
+                interaction: { intersect: false, mode: 'index' },
+            },
+        });
+
+        // Indicators
+        var ind = result.indicators;
+        document.getElementById('liveSST').innerHTML = ind.sst + ' <span class="info-unit">°C</span>';
+        document.getElementById('liveOHC').innerHTML = ind.ohc_kj_cm2 + ' <span class="info-unit">kJ/cm²</span>';
+        document.getElementById('liveThermo').innerHTML = ind.thermocline_depth_m + ' <span class="info-unit">m</span>';
+        document.getElementById('liveMHW').textContent = ind.mhw.intensity.toFixed(2);
+
+        var mhwS = document.getElementById('liveMHWStatus');
+        if (ind.mhw.detected) {
+            mhwS.className = 'status-bar warning';
+            mhwS.innerHTML = '<div class="status-dot warning"></div><span>Marine heatwave detected (' + (ind.mhw.fraction * 100).toFixed(1) + '% area)</span>';
+        } else {
+            mhwS.className = 'status-bar safe';
+            mhwS.innerHTML = '<div class="status-dot safe"></div><span>No marine heatwave</span>';
+        }
+
+        var crS = document.getElementById('liveCycloneStatus');
+        if (ind.cyclone_risk.pct_high_risk > 10) {
+            crS.className = 'status-bar danger';
+            crS.innerHTML = '<div class="status-dot danger"></div><span>Cyclone risk: HIGH (' + ind.cyclone_risk.pct_high_risk.toFixed(1) + '% extreme OHC)</span>';
+        } else if (ind.cyclone_risk.pct_favorable > 30) {
+            crS.className = 'status-bar warning';
+            crS.innerHTML = '<div class="status-dot warning"></div><span>Cyclone risk: MODERATE (' + ind.cyclone_risk.pct_favorable.toFixed(1) + '% favorable)</span>';
+        } else {
+            crS.className = 'status-bar safe';
+            crS.innerHTML = '<div class="status-dot safe"></div><span>Cyclone risk: LOW</span>';
+        }
+
+        // Place marker on map
+        if (map) {
+            L.circleMarker([result.latitude, result.longitude], {
+                radius: 8, fillColor: '#f59e0b', fillOpacity: 0.9,
+                color: '#fff', weight: 2,
+            }).addTo(map).bindTooltip('Your Location', { permanent: true, direction: 'top', className: 'ocean-tooltip' });
+            map.setView([result.latitude, result.longitude], 6);
+        }
+
+        showToast('Reconstruction complete!', 'info');
+
+        // Render fish forecast
+        renderFishForecast(result.depths, result.temperature);
+    }
+
+    // ==================== PRECOMPUTED DATA ====================
+    async function loadData() {
+        try {
+            var resp = await fetch('data/demo_data.json?v=' + Date.now());
+            demoData = await resp.json();
+            document.getElementById('loadingOverlay').style.display = 'none';
+            initPrecomputedUI();
+        } catch (e) {
+            console.error('Failed to load demo data:', e);
+            document.querySelector('.loading-text').textContent = 'Model ready. Use Live Input tab or load demo data.';
+            setTimeout(function() { document.getElementById('loadingOverlay').style.display = 'none'; }, 2000);
+        }
+    }
+
+    function initPrecomputedUI() {
+        initMonthTabs();
+        initDateSelector();
+        initLocationList();
+        if (demoData.dates.length > 0) selectDate(demoData.dates[0]);
+    }
+
+    function initMonthTabs() {
+        var container = document.getElementById('monthTabs');
+        var months = [...new Set(demoData.dates.map(function(d) { return parseInt(d.split('-')[1]); }))];
+        months.forEach(function(m) {
+            var tab = document.createElement('div');
+            tab.className = 'month-tab';
+            tab.textContent = MONTHS[m - 1];
+            tab.dataset.month = m;
+            tab.onclick = function() { filterDatesByMonth(m); };
+            container.appendChild(tab);
+        });
+    }
+
+    function filterDatesByMonth(month) {
+        document.querySelectorAll('.month-tab').forEach(function(t) { t.classList.remove('active'); });
+        document.querySelector('.month-tab[data-month="' + month + '"]').classList.add('active');
+        var container = document.getElementById('dateSelector');
+        container.innerHTML = '';
+        demoData.dates.filter(function(d) { return parseInt(d.split('-')[1]) === month; }).forEach(function(d) {
+            var btn = document.createElement('div');
+            btn.className = 'date-btn' + (d === selectedDate ? ' active' : '');
+            btn.textContent = d;
+            btn.onclick = function() { selectDate(d); };
+            container.appendChild(btn);
+        });
+    }
+
+    function initDateSelector() {
+        filterDatesByMonth(parseInt(demoData.dates[0].split('-')[1]));
+    }
+
+    function initLocationList() {
+        var container = document.getElementById('locationList');
+        demoData.locations.forEach(function(loc, idx) {
+            var item = document.createElement('div');
+            item.className = 'location-item';
+            item.dataset.idx = idx;
+            item.innerHTML = '<div class="location-dot"></div>' +
+                '<span class="location-name">' + loc.name + '</span>' +
+                '<span class="location-coords">' + loc.lat.toFixed(1) + '°N, ' + loc.lon.toFixed(1) + '°E</span>';
+            item.onclick = function() { selectLocation(idx); };
+            container.appendChild(item);
+        });
+    }
+
+    function selectDate(date) {
+        selectedDate = date;
+        document.querySelectorAll('.date-btn').forEach(function(b) { b.classList.remove('active'); });
+        document.querySelectorAll('.date-btn').forEach(function(b) {
+            if (b.textContent === date) b.classList.add('active');
+        });
+        var month = parseInt(date.split('-')[1]);
+        document.querySelectorAll('.month-tab').forEach(function(t) {
+            t.classList.toggle('active', parseInt(t.dataset.month) === month);
+        });
+        buildOverlays();
+        if (activeOverlay) setOverlay(activeOverlay);
+        updatePrecomputedIndicators();
+        if (selectedLocation !== null) updatePrecomputedProfile();
+    }
+
+    function selectLocation(idx) {
+        selectedLocation = idx;
+        var loc = demoData.locations[idx];
+        document.querySelectorAll('.location-item').forEach(function(item) {
+            item.classList.toggle('active', parseInt(item.dataset.idx) === idx);
+        });
+        Object.values(locationMarkers).forEach(function(m) {
+            m.setStyle({ fillColor: '#06b6d4', color: '#060d1f', radius: 7 });
+        });
+        if (locationMarkers[idx]) {
+            locationMarkers[idx].setStyle({ fillColor: '#f59e0b', color: '#fff', radius: 9 });
+        }
+        document.getElementById('locationInfo').textContent =
+            loc.name + ' (' + loc.lat.toFixed(1) + '°N, ' + loc.lon.toFixed(1) + '°E)';
+        updatePrecomputedProfile();
+        updatePrecomputedIndicators();
+    }
+
+    function updatePrecomputedProfile() {
+        if (!selectedDate || selectedLocation === null) return;
+        var dateData = demoData.outputs[selectedDate];
+        if (!dateData) return;
+        var profile = dateData.profiles[selectedLocation];
+        if (!profile) return;
+
+        var depths = demoData.depths;
+        var temps = profile.temperatures;
+
+        // Check for ARGO comparison data
+        var argoNote = document.getElementById('argoCompareNote');
+        var argoRMSE = document.getElementById('argoRMSE');
+        var argoProfile = profile.argo || null;
+
+        var datasets = [{
+            label: 'Reconstructed',
+            data: temps,
+            borderColor: '#06b6d4',
+            backgroundColor: function(context) {
+                var chart = context.chart;
+                var ctx2 = chart.ctx;
+                var area = chart.chartArea;
+                if (!area) return 'rgba(6, 182, 212, 0.08)';
+                var gradient = ctx2.createLinearGradient(area.left, area.top, area.left, area.bottom);
+                gradient.addColorStop(0, 'rgba(6, 182, 212, 0.2)');
+                gradient.addColorStop(1, 'rgba(6, 182, 212, 0.02)');
+                return gradient;
+            },
+            fill: true, tension: 0.4,
+            pointRadius: 4, pointBackgroundColor: '#06b6d4',
+            pointBorderColor: '#060d1f', pointBorderWidth: 2, borderWidth: 2.5,
+            pointHoverRadius: 6, pointHoverBackgroundColor: '#22d3ee',
+        }];
+
+        if (argoProfile && argoProfile.temperatures) {
+            // ARGO line: dashed, distinct color
+            datasets.push({
+                label: 'Real ARGO',
+                data: argoProfile.temperatures.map(function(t) { return t === null ? null : t; }),
+                borderColor: '#10b981',
+                backgroundColor: 'transparent',
+                fill: false, tension: 0.3,
+                pointRadius: 5, pointBackgroundColor: '#10b981',
+                pointBorderColor: '#fff', pointBorderWidth: 2,
+                borderWidth: 2.5, borderDash: [6, 4],
+                pointHoverRadius: 7, spanGaps: true,
+            });
+            if (argoNote) argoNote.style.display = 'block';
+            if (argoRMSE) {
+                if (argoProfile.rmse != null) {
+                    argoRMSE.style.display = 'block';
+                    argoRMSE.textContent = 'Point-wise RMSE vs ARGO: ' + argoProfile.rmse.toFixed(2) + ' °C (' + argoProfile.n_points + ' matched depths)';
+                } else {
+                    argoRMSE.style.display = 'none';
+                }
+            }
+        } else {
+            if (argoNote) argoNote.style.display = 'none';
+            if (argoRMSE) argoRMSE.style.display = 'none';
+        }
+
+        var ctx = document.getElementById('profileChart').getContext('2d');
+        if (profileChart) profileChart.destroy();
+
+        profileChart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: depths.map(function(d) { return d + 'm'; }), datasets: datasets },
+            options: {
+                responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+                scales: {
+                    x: { title: { display: true, text: 'Temperature (°C)', color: '#8faec8', font: { size: 11, family: "'Inter', sans-serif" } }, grid: { color: 'rgba(6,182,212,0.08)', drawBorder: false }, ticks: { color: '#8faec8', font: { size: 10, family: "'Inter', sans-serif" } } },
+                    y: { title: { display: true, text: 'Depth', color: '#8faec8', font: { size: 11, family: "'Inter', sans-serif" } }, reverse: true, grid: { color: 'rgba(6,182,212,0.08)', drawBorder: false }, ticks: { color: '#8faec8', font: { size: 10, family: "'Inter', sans-serif" } } },
+                },
+                plugins: {
+                    legend: {
+                        display: !!argoProfile,
+                        labels: { color: '#8faec8', font: { size: 10 }, usePointStyle: true, pointStyle: 'line' }
+                    }
+                },
+                interaction: { intersect: false, mode: 'index' },
+            },
+        });
+    }
+
+    function updatePrecomputedIndicators() {
+        if (!selectedDate || selectedLocation === null) return;
+        var dateData = demoData.outputs[selectedDate];
+        if (!dateData) return;
+        var profile = dateData.profiles[selectedLocation];
+        if (!profile) return;
+
+        var sst = profile.temperatures[0];
+        document.getElementById('sstValue').innerHTML = sst.toFixed(1) + ' <span class="info-unit">°C</span>';
+
+        var maxGrad = 0, thermoIdx = 3;
+        for (var i = 1; i < profile.temperatures.length; i++) {
+            var grad = Math.abs(profile.temperatures[i] - profile.temperatures[i - 1]);
+            if (grad > maxGrad) { maxGrad = grad; thermoIdx = i; }
+        }
+        document.getElementById('thermoDepth').innerHTML = demoData.depths[thermoIdx] + ' <span class="info-unit">m</span>';
+
+        var latIdx = Math.round((profile.lat - demoData.domain.lat_min) / demoData.domain.resolution);
+        var lonIdx = Math.round((profile.lon - demoData.domain.lon_min) / demoData.domain.resolution);
+        var ohc = dateData.ohc_map[Math.min(latIdx, 100)] ? dateData.ohc_map[Math.min(latIdx, 100)][Math.min(lonIdx, 220)] : '--';
+        document.getElementById('ohcValue').innerHTML = (typeof ohc === 'number' ? ohc.toFixed(0) : ohc) + ' <span class="info-unit">kJ/cm²</span>';
+
+        var mhw = dateData.mhw;
+        document.getElementById('mhwIntensity').textContent = mhw.max_intensity.toFixed(2);
+        var mhwStatus = document.getElementById('mhwStatus');
+        if (mhw.is_mhw) {
+            mhwStatus.className = 'status-bar warning';
+            mhwStatus.innerHTML = '<div class="status-dot warning"></div><span>Marine heatwave detected (' + (mhw.mhw_fraction * 100).toFixed(1) + '% area)</span>';
+        } else {
+            mhwStatus.className = 'status-bar safe';
+            mhwStatus.innerHTML = '<div class="status-dot safe"></div><span>No marine heatwave</span>';
+        }
+
+        var cr = dateData.cyclone_risk;
+        var crStatus = document.getElementById('cycloneStatus');
+        if (cr.pct_high_risk > 10) {
+            crStatus.className = 'status-bar danger';
+            crStatus.innerHTML = '<div class="status-dot danger"></div><span>Cyclone risk: HIGH (' + cr.pct_high_risk.toFixed(1) + '% extreme OHC)</span>';
+        } else if (cr.pct_favorable > 30) {
+            crStatus.className = 'status-bar warning';
+            crStatus.innerHTML = '<div class="status-dot warning"></div><span>Cyclone risk: MODERATE (' + cr.pct_favorable.toFixed(1) + '% favorable)</span>';
+        } else {
+            crStatus.className = 'status-bar safe';
+            crStatus.innerHTML = '<div class="status-dot safe"></div><span>Cyclone risk: LOW</span>';
+        }
+    }
+
+    // ==================== MAP LAYERS ====================
+    var overlayLayers = {};
+    var activeOverlay = null;
+    var baseLayer = null;
+
+    function createColorLegend(stops, min, max) {
+        var canvas = document.createElement('canvas');
+        canvas.width = 256; canvas.height = 16;
+        var ctx = canvas.getContext('2d');
+        for (var x = 0; x < 256; x++) {
+            var t = x / 255;
+            var r, g, b;
+            if (t < 0.25) { var u = t / 0.25; r = 30 + (6 - 30) * u; g = 58 + (182 - 58) * u; b = 95 + (212 - 95) * u; }
+            else if (t < 0.5) { var u = (t - 0.25) / 0.25; r = 6 + (6 - 6) * u; g = 182 + (182 - 182) * u; b = 212 + (191 - 212) * u; }
+            else if (t < 0.75) { var u = (t - 0.5) / 0.25; r = 6 + (251 - 6) * u; g = 182 + (191 - 182) * u; b = 191 + (36 - 191) * u; }
+            else { var u = (t - 0.75) / 0.25; r = 251 + (239 - 251) * u; g = 191 + (68 - 191) * u; b = 36 + (68 - 36) * u; }
+            ctx.fillStyle = 'rgb(' + Math.round(r) + ',' + Math.round(g) + ',' + Math.round(b) + ')';
+            ctx.fillRect(x, 0, 1, 16);
+        }
+        return canvas.toDataURL();
+    }
+
+    function renderGridOverlay(grid, min, max, opacity) {
+        var rows = grid.length, cols = grid[0].length;
+        var canvas = document.createElement('canvas');
+        canvas.width = cols; canvas.height = rows;
+        var ctx = canvas.getContext('2d');
+        var img = ctx.createImageData(cols, rows);
+        for (var y = 0; y < rows; y++) {
+            for (var x = 0; x < cols; x++) {
+                var v = grid[y][x];
+                var t = (v - min) / (max - min);
+                t = Math.max(0, Math.min(1, t));
+                var idx = (y * cols + x) * 4;
+                var r, g, b;
+                if (t < 0.25) { var u = t / 0.25; r = 30 + (6 - 30) * u; g = 58 + (182 - 58) * u; b = 95 + (212 - 95) * u; }
+                else if (t < 0.5) { var u = (t - 0.25) / 0.25; r = 6 + (6 - 6) * u; g = 182 + (182 - 182) * u; b = 212 + (191 - 212) * u; }
+                else if (t < 0.75) { var u = (t - 0.5) / 0.25; r = 6 + (251 - 6) * u; g = 182 + (191 - 182) * u; b = 191 + (36 - 191) * u; }
+                else { var u = (t - 0.75) / 0.25; r = 251 + (239 - 251) * u; g = 191 + (68 - 191) * u; b = 36 + (68 - 36) * u; }
+                img.data[idx] = r; img.data[idx+1] = g; img.data[idx+2] = b; img.data[idx+3] = Math.round(opacity * 255);
+            }
+        }
+        ctx.putImageData(img, 0, 0);
+        var dataUrl = canvas.toDataURL();
+        var bounds = [[DOMAIN.lat_min, DOMAIN.lon_min], [DOMAIN.lat_max, DOMAIN.lon_max]];
+        return L.imageOverlay(dataUrl, bounds, { opacity: opacity, interactive: false });
+    }
+
+    function buildOverlays() {
+        if (!demoData || !selectedDate) return;
+        var dateData = demoData.outputs[selectedDate];
+        if (!dateData) return;
+
+        Object.values(overlayLayers).forEach(function(l) { if (map.hasLayer(l)) map.removeLayer(l); });
+        overlayLayers = {};
+
+        if (dateData.sst_map) {
+            var flat = dateData.sst_map.flat().filter(function(v) { return v != null && !isNaN(v); });
+            var sMin = Math.min.apply(null, flat), sMax = Math.max.apply(null, flat);
+            overlayLayers['sst'] = renderGridOverlay(dateData.sst_map, sMin, sMax, 0.55);
+        }
+        if (dateData.ohc_map) {
+            var flat = dateData.ohc_map.flat().filter(function(v) { return v != null && !isNaN(v); });
+            var oMin = Math.min.apply(null, flat), oMax = Math.max.apply(null, flat);
+            overlayLayers['ohc'] = renderGridOverlay(dateData.ohc_map, oMin, oMax, 0.55);
+        }
+        if (dateData.anomaly_map) {
+            var flat = dateData.anomaly_map.flat().filter(function(v) { return v != null && !isNaN(v); });
+            var aAbs = Math.max(Math.abs(Math.min.apply(null, flat)), Math.abs(Math.max.apply(null, flat)));
+            overlayLayers['anomaly'] = renderGridOverlay(dateData.anomaly_map, -aAbs, aAbs, 0.6);
+        }
+
+        if (activeOverlay && overlayLayers[activeOverlay]) {
+            overlayLayers[activeOverlay].addTo(map);
+        }
+    }
+
+    function setOverlay(name) {
+        activeOverlay = name;
+        Object.keys(overlayLayers).forEach(function(k) {
+            if (map.hasLayer(overlayLayers[k])) map.removeLayer(overlayLayers[k]);
+        });
+        if (name && overlayLayers[name]) {
+            overlayLayers[name].addTo(map);
+            var legend = document.getElementById('overlayLegend');
+            if (legend) legend.style.display = 'flex';
+        } else {
+            var legend = document.getElementById('overlayLegend');
+            if (legend) legend.style.display = 'none';
+        }
+        document.querySelectorAll('.overlay-btn').forEach(function(b) {
+            b.classList.toggle('active', b.dataset.overlay === (name || ''));
+        });
+    }
+
+    // ==================== MAP INIT ====================
+    function initMap() {
+        map = L.map('map', {
+            center: [14, 76], zoom: 5,
+            minZoom: 4, maxZoom: 10,
+            zoomControl: true, attributionControl: false,
+        });
+
+        // Offline-first: set a dark background, then TRY to load online tiles.
+        // If tiles fail (offline judging), map still works with plain background.
+        map._container.style.background = '#060d1f';
+
+        var tileLoaded = false;
+        baseLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 16,
+            attribution: 'Tiles &copy; Esri',
+            errorTileUrl: '',
+        });
+        baseLayer.on('load', function() { tileLoaded = true; });
+        baseLayer.on('tileerror', function() {
+            if (!tileLoaded) {
+                // Offline mode: draw a subtle lat/lon grid instead of tiles
+                drawOfflineGrid();
+            }
+        });
+        baseLayer.addTo(map);
+        // Fallback check after 3s: if no tiles loaded, draw grid
+        setTimeout(function() { if (!tileLoaded) drawOfflineGrid(); }, 3000);
+
+        function drawOfflineGrid() {
+            if (map._offlineGridDrawn) return;
+            map._offlineGridDrawn = true;
+            var gridGroup = L.layerGroup();
+            for (var lat = DOMAIN.lat_min; lat <= DOMAIN.lat_max; lat += 5) {
+                L.polyline([[lat, DOMAIN.lon_min], [lat, DOMAIN.lon_max]], { color: 'rgba(6,182,212,0.12)', weight: 1, interactive: false }).addTo(gridGroup);
+            }
+            for (var lon = DOMAIN.lon_min; lon <= DOMAIN.lon_max; lon += 5) {
+                L.polyline([[DOMAIN.lat_min, lon], [DOMAIN.lat_max, lon]], { color: 'rgba(6,182,212,0.12)', weight: 1, interactive: false }).addTo(gridGroup);
+            }
+            gridGroup.addTo(map);
+            showToast('Offline mode — using grid background (no internet tiles)', 'info');
+        }
+
+        // Draw domain border
+        var domainBounds = [
+            [DOMAIN.lat_min, DOMAIN.lon_min],
+            [DOMAIN.lat_min, DOMAIN.lon_max],
+            [DOMAIN.lat_max, DOMAIN.lon_max],
+            [DOMAIN.lat_max, DOMAIN.lon_min],
+            [DOMAIN.lat_min, DOMAIN.lon_min]
+        ];
+        L.polygon(domainBounds, {
+            color: '#06b6d4',
+            weight: 2,
+            dashArray: '8, 6',
+            fillColor: '#06b6d4',
+            fillOpacity: 0.04,
+            interactive: false,
+        }).addTo(map);
+
+        // Domain label
+        var domainLabel = L.divIcon({
+            className: '',
+            html: '<div style="color: rgba(6, 182, 212, 0.35); font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; font-family: Inter, sans-serif; pointer-events: none;">OceanEmbed Zone</div>',
+            iconSize: [160, 20],
+            iconAnchor: [80, 10],
+        });
+        L.marker([12.5, 72.5], { icon: domainLabel, interactive: false }).addTo(map);
+
+        // Click on map with restrictions
+        var clickMarker = null;
+        map.on('click', function(e) {
+            var lat = Math.round(e.latlng.lat * 100) / 100;
+            var lon = Math.round(e.latlng.lng * 100) / 100;
+
+            // Domain check
+            if (!isInDomain(lat, lon)) {
+                showToast('Click outside domain — select within 0–25°N, 45–100°E', 'error');
+                return;
+            }
+
+            document.getElementById('inputLat').value = lat;
+            document.getElementById('inputLon').value = lon;
+
+            if (clickMarker) map.removeLayer(clickMarker);
+            clickMarker = L.circleMarker([lat, lon], {
+                radius: 7, fillColor: '#06b6d4', fillOpacity: 0.9,
+                color: '#fff', weight: 2,
+            }).addTo(map);
+            clickMarker.bindTooltip(lat + '°N, ' + lon + '°E', { permanent: true, direction: 'top', offset: [0, -10], className: 'ocean-tooltip' });
+
+            // Fade hint after first click
+            if (mapClickCount === 0) {
+                var hint = document.getElementById('mapClickHint');
+                hint.classList.add('faded');
+            }
+            mapClickCount++;
+
+            showToast('Location set: ' + lat + '°N, ' + lon + '°E', 'info');
+        });
+
+        // Precomputed markers
+        if (demoData) {
+            demoData.locations.forEach(function(loc, idx) {
+                var marker = L.circleMarker([loc.lat, loc.lon], {
+                    radius: 7, fillColor: '#06b6d4', fillOpacity: 0.9, color: '#060d1f', weight: 2,
+                }).addTo(map);
+                marker.bindTooltip(loc.name, { permanent: false, direction: 'top', offset: [0, -8] });
+                marker.on('click', function() {
+                    switchTab('precomputed');
+                    selectLocation(idx);
+                });
+                locationMarkers[idx] = marker;
+            });
+        }
+    }
+
+    // ==================== ONBOARDING ====================
+    function dismissOnboarding() {
+        var dontShow = document.getElementById('onboardDontShow').checked;
+        if (dontShow) localStorage.setItem('oceanembed_onboarded', '1');
+        document.getElementById('onboardingOverlay').classList.add('hidden');
+    }
+    function checkOnboarding() {
+        if (localStorage.getItem('oceanembed_onboarded') === '1') {
+            document.getElementById('onboardingOverlay').classList.add('hidden');
+        }
+    }
+
+    // ==================== INIT ====================
+    document.addEventListener('DOMContentLoaded', function() {
+        checkOnboarding();
+        initMap();
+        loadData();
+        checkApiAvailability();
+    });
+    </script>
+</body>
+</html>

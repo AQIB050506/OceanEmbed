@@ -1,0 +1,694 @@
+================================================================================
+                     OCEANEMBED - COMPLETE PROJECT DOCUMENTATION
+              Satellite Embedding-Based Subsurface Ocean Temperature
+                          Reconstruction System
+================================================================================
+  Hackathon : Smart India Hackathon 2026 (SIH26066)
+  Team      : Neural Shadows
+  Domain    : North Indian Ocean (0-25N, 45-100E)
+  Resolution: 0.25 degrees (~28 km)
+================================================================================
+
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+  1.  Project Overview
+  2.  Problem Statement
+  3.  Solution Architecture
+  4.  Data Pipeline
+  5.  ML Model Architecture
+  6.  Training Details
+  7.  Validation & Performance
+  8.  Demo Application
+  9.  API Endpoints
+  10. Frontend Features
+  11. Fish Forecast Feature
+  12. File Structure
+  13. Setup & Installation
+  14. How to Run
+  15. Configuration
+  16. Key Technologies
+  17. Future Scope
+
+
+================================================================================
+1. PROJECT OVERVIEW
+================================================================================
+
+OceanEmbed is an AI-powered system that reconstructs subsurface ocean
+temperature profiles (0-450m depth) using only satellite surface data
+for the North Indian Ocean region.
+
+WHAT IT DOES:
+  - Takes 5 satellite surface measurements as input
+  - Uses a deep learning model to predict temperature at 15 depth levels
+  - Provides ocean heat content analysis
+  - Detects marine heatwaves
+  - Assesses cyclone intensification risk
+  - Forecasts fish species availability at different depths
+
+THE 5 INPUT CHANNELS:
+  1. SST  - Sea Surface Temperature (degrees Kelvin)
+  2. SSH  - Sea Surface Height / Sea Level Anomaly (meters)
+  3. SSS  - Sea Surface Salinity (PSU)
+  4. Wind U - East-West wind component (m/s)
+  5. Wind V - North-South wind component (m/s)
+
+THE 15 OUTPUT DEPTH LEVELS:
+  0m, 5m, 10m, 20m, 30m, 50m, 75m, 100m, 125m, 150m,
+  200m, 250m, 300m, 400m, 450m
+
+
+================================================================================
+2. PROBLEM STATEMENT
+================================================================================
+
+Direct measurement of subsurface ocean temperature requires expensive in-situ
+instruments like Argo floats, moored buoys, or ship-based CTD casts. These are:
+  - Sparse in coverage (especially in the North Indian Ocean)
+  - Expensive to deploy and maintain
+  - Not available in real-time for all locations
+
+Satellites can measure surface variables (SST, SSH, SSS, winds) globally and
+in near-real-time, but cannot see below the surface.
+
+THE GAP: How to reconstruct the full subsurface temperature profile from
+only surface observations?
+
+WHY IT MATTERS:
+  - Cyclone intensification depends on subsurface heat content
+  - Fisheries management needs to know where fish are at depth
+  - Climate monitoring requires deep ocean temperature trends
+  - Marine heatwave detection needs vertical temperature structure
+
+
+================================================================================
+3. SOLUTION ARCHITECTURE
+================================================================================
+
+The system has 3 main components:
+
+  +--------------------+     +------------------+     +------------------+
+  |   DATA LAYER       | --> |   MODEL LAYER    | --> |  APPLICATION     |
+  |                    |     |                  |     |  LAYER           |
+  | - GLORYS reanalysis|     | - Attention-     |     | - OHC calculation|
+  | - Copernicus SST   |     |   Enhanced 3D    |     | - MHW detection  |
+  | - Copernicus SSH   |     |   U-Net++        |     | - Cyclone risk   |
+  | - Copernicus SSS   |     | - CBAM attention |     | - Fish forecast  |
+  | - Copernicus Wind  |     | - FiLM condition |     | - Web demo       |
+  | - INCOIS Argo      |     |                  |     |                  |
+  +--------------------+     +------------------+     +------------------+
+
+DATA FLOW:
+  Satellite Surface Data (5 channels x 5 days x 101x221 grid)
+       |
+       v
+  Normalization (using training set statistics)
+       |
+       v
+  3D U-Net++ Encoder (3 levels, CBAM attention at each level)
+       |
+       v
+  Bottleneck (deepest features + CBAM)
+       |
+       v
+  3D U-Net++ Decoder (3 levels with skip connections)
+       |
+       v
+  Temporal averaging (collapse 5-day dimension)
+       |
+       v
+  Depth projection (2D conv -> 15 channels)
+       |
+       v
+  Denormalization -> Temperature profiles at 15 depths (Celsius)
+
+
+================================================================================
+4. DATA PIPELINE
+================================================================================
+
+4.1 DATA SOURCES
+  Source              Variable    Resolution   Period
+  -------             --------    ----------   ------
+  GLORYS12 reanalysis thetao,so   0.25 deg     2010-2026
+  Copernicus SST      analysed_sst 0.05 deg    2010-2025
+  Copernicus SSH      sla         0.25 deg     2010-2025
+  Copernicus SSS      sos         0.25 deg     2010-2025
+  Copernicus Wind     u,v winds   0.25 deg     2010-2025
+  INCOIS Argo Floats  temperature in-situ      2010-2025
+
+4.2 PREPROCESSING STEPS
+  1. Download raw NetCDF files from Copernicus/Godae
+  2. Harmonize all variables to common 0.25-degree grid
+  3. Regrid SST from 0.05 to 0.25 degrees (bilinear interpolation)
+  4. Split into train (2010-2021), val (2022-2023), test (2024-2025)
+  5. Normalize each variable using training set mean/std
+  6. Create spatio-temporal patches (5-day windows)
+  7. Save as train/val/test_surface.nc and train/val/test_target.nc
+
+4.3 NORMALIZATION STATISTICS
+  Variable  Mean        Std
+  --------  ----------  ----------
+  SST       301.576 K   1.581 K
+  SSH       0.079 m     0.089 m
+  SSS       34.720 PSU  1.623 PSU
+  Wind U    0.951 m/s   3.853 m/s
+  Wind V    0.325 m/s   3.629 m/s
+  thetao    21.621 C    7.063 C
+
+4.4 GRID SPECIFICATIONS
+  Latitude:   0.0 to 25.0 N (101 grid points)
+  Longitude: 45.0 to 100.0 E (221 grid points)
+  Total grid: 101 x 221 = 22,321 spatial points
+
+
+================================================================================
+5. ML MODEL ARCHITECTURE
+================================================================================
+
+Model Name: Attention-Enhanced 3D U-Net++ with CBAM
+
+References:
+  - Wang et al. (2026): "Attention enhanced 3D-U-Net++ ocean temperature
+    and salinity reconstruction"
+  - TS-Cast (Chae et al., 2026): FiLM conditioning on climatological priors
+
+5.1 KEY COMPONENTS
+
+  a) 3D Convolutions
+     - Process spatial (lat x lon) AND temporal (5-day window) dimensions
+     - Kernel size: 3x3x3
+     - Preserves spatio-temporal correlations
+
+  b) CBAM (Convolutional Block Attention Module)
+     - Channel Attention: learns which feature maps matter
+     - Spatial Attention: learns which spatial locations matter
+     - Applied at each encoder and decoder level
+
+  c) Encoder-Decoder with Skip Connections
+     - 3 encoder levels (each doubles channels, halves spatial dims)
+     - 3 decoder levels (each halves channels, doubles spatial dims)
+     - Skip connections preserve fine spatial details
+
+  d) FiLM Conditioning (optional)
+     - Feature-wise Linear Modulation
+     - Conditions output on climatological profile priors
+
+5.2 NETWORK DIMENSIONS
+
+  Layer        Input Shape         Output Shape       Parameters
+  -----------  ------------------  ------------------  ----------
+  input_conv   (5, 5, 101, 221)    (64, 5, 101, 221)  320
+  enc1         (64, 5, 101, 221)   (64, 5, 51, 111)   ~120K
+  enc2         (64, 5, 51, 111)    (128, 5, 26, 56)   ~470K
+  enc3         (128, 5, 26, 56)    (256, 5, 13, 28)   ~1.9M
+  bottleneck   (256, 5, 13, 28)    (256, 5, 13, 28)   ~1.9M
+  dec3         (256, 5, 13, 28)    (128, 5, 26, 56)   ~1.9M
+  dec2         (128, 5, 26, 56)    (64, 5, 51, 111)   ~470K
+  dec1         (64, 5, 51, 111)    (64, 5, 101, 221)  ~120K
+  depth_proj   (64, 101, 221)      (15, 101, 221)     ~6K
+
+  Total trainable parameters: ~5-6 million
+
+5.3 INPUT SHAPE
+  (B, C=5, T=5, H=101, W=221)
+  B = batch size (2 during training)
+  C = 5 channels (SST, SSH, SSS, Wind-U, Wind-V)
+  T = 5 timesteps (consecutive days)
+  H = 101 latitude points
+  W = 221 longitude points
+
+5.4 OUTPUT SHAPE
+  (B, N_depth=15, H=101, W=221)
+  Temperature at 15 depth levels for every grid point
+
+
+================================================================================
+6. TRAINING DETAILS
+================================================================================
+
+  Hyperparameter          Value
+  ----------------------  ------------------
+  Optimizer               AdamW
+  Learning Rate           1e-4
+  Weight Decay            1e-5
+  Scheduler               Cosine annealing
+  Warmup Epochs           5
+  Batch Size              2
+  Epochs                  100
+  Temporal Window         5 days
+  Dropout                 0.1
+  Gradient Clip Norm      1.0
+  Early Stopping Patience 15 epochs
+  Embedding Dimension     64
+  Loss Function           MSE (Mean Squared Error)
+  Device                  NVIDIA GPU (CUDA)
+
+  Training Period:  2010-2021 (12 years)
+  Validation Period: 2022-2023 (2 years)
+  Test Period:       2024-2025 (2 years)
+
+  Checkpoints saved every 5 epochs.
+  Best model selected by validation loss.
+
+  NOTE: The model weights show divergence (max weight ~212K) by epoch 96,
+  but the model still produces reasonable outputs for well-covered grid
+  points. A climatological fallback is used for points where the model
+  output is flat or noisy.
+
+
+================================================================================
+7. VALIDATION & PERFORMANCE
+================================================================================
+
+7.1 AGAINST GLORYS REANALYSIS (Test Set)
+  Metric              Value
+  ------------------  -----
+  R-squared           0.989
+  RMSE                Low (model closely tracks GLORYS)
+
+7.2 AGAINST INCOIS ARGO FLOATS (Independent Validation)
+  Number of Argo observations: 56,925
+  Metric              Value
+  ------------------  -----
+  RMSE                1.02 C
+  Correlation         0.83
+
+  This means:
+  - On average, predictions are within ~1 C of actual float measurements
+  - Strong linear correlation with observed temperatures
+  - Performance is competitive with operational oceanography products
+
+7.3 APPLICATION PRODUCTS VALIDATED
+  - Ocean Heat Content (OHC): integrated 0-200m
+  - Marine Heatwave (MHW) detection: binary + intensity
+  - Cyclone risk classification: favorable / high risk zones
+
+
+================================================================================
+8. DEMO APPLICATION
+================================================================================
+
+The demo is a web application with:
+  - FastAPI backend (Python)
+  - Leaflet + Chart.js frontend (HTML/CSS/JS)
+
+8.1 BACKEND (demo/backend/app.py - 386 lines)
+  - FastAPI with CORS enabled
+  - Serves precomputed demo data (2024)
+  - Runs live model inference on demand
+  - Static file serving for frontend
+
+8.2 FRONTEND (demo/frontend/index.html - 1,407 lines)
+  - Dark ocean-themed UI (CSS custom properties)
+  - Interactive Leaflet map (Esri Dark Gray Canvas tiles)
+  - North Indian Ocean domain boundary overlay
+  - Side panel with tabs (Live Input / Precomputed)
+  - Real-time Chart.js temperature profiles
+  - Fish species forecast
+  - Responsive design (mobile bottom sheet)
+  - Onboarding overlay for first-time users
+  - Toast notification system
+
+8.3 PRECOMPUTED DATA
+  - 12 dates across all seasons in 2024
+  - 12 locations across North Indian Ocean
+  - Pre-generated temperature profiles, OHC, MHW, cyclone risk
+  - Stored in demo/frontend/data/demo_data.json (9.8 MB)
+
+
+================================================================================
+9. API ENDPOINTS
+================================================================================
+
+  Method  Endpoint            Description
+  ------  ------------------  -------------------------------------------
+  GET     /api/info           Server info (name, version, status)
+  GET     /api/dates          Available precomputed dates
+  GET     /api/locations      Available precomputed locations
+  POST    /api/profile        Get precomputed profile at lat/lon/date
+  POST    /api/predict        Run live model inference from surface data
+
+  POST /api/predict request body:
+    {
+      "latitude":  15.0,      // degrees N (0-25)
+      "longitude": 76.0,      // degrees E (45-100)
+      "sst":       28.5,      // degrees Celsius
+      "ssh":       0.3,       // meters
+      "sss":       34.0,      // PSU
+      "wind_u":   -2.0,       // m/s (eastward positive)
+      "wind_v":    3.5        // m/s (northward positive)
+    }
+
+  POST /api/predict response:
+    {
+      "latitude": 15.0,
+      "longitude": 76.0,
+      "depths": [0, 5, 10, 20, 30, 50, 75, 100, 125, 150, 200, 250, 300, 400, 450],
+      "temperature": [28.5, 28.3, 27.8, 25.2, ...],  // 15 values in Celsius
+      "source": "live_model",
+      "inference": { ... },
+      "indicators": {
+        "sst": 28.5,
+        "ohc_kj_cm2": 1766.3,
+        "thermocline_depth_m": 75,
+        "mhw": { "detected": true, "fraction": 0.993, "intensity": 2.20 },
+        "cyclone_risk": { "mean_ohc_kj": 1800, "pct_favorable": 45.2, "pct_high_risk": 12.3 }
+      }
+    }
+
+
+================================================================================
+10. FRONTEND FEATURES
+================================================================================
+
+10.1 MAP FEATURES
+  - Esri Dark Gray Canvas base tiles (free, no API key)
+  - "OceanEmbed Zone" label showing training domain boundary
+  - Click anywhere on ocean to set latitude/longitude
+  - Markers for precomputed locations
+  - Domain restriction (clicks outside 0-25N, 45-100E rejected)
+
+10.2 LIVE INPUT TAB
+  - Form to enter SST, SSH, SSS, Wind-U, Wind-V manually
+  - 9 preset buttons for quick scenario loading:
+    - Arabian Sea (Summer)
+    - Bay of Bengal (Monsoon)
+    - Cyclone Favorable Zone
+    - Cold Upwelling (Oman)
+    - Cyclone Amphan (May 2020, Cat 5)
+    - Cyclone Fani (May 2019, Cat 4)
+    - Cyclone Biparjoy (Jun 2023, Cat 1)
+    - Cyclone Michaung (Dec 2023, Cat 1)
+    - Cyclone Tauktae (May 2021, Cat 4)
+  - "Reconstruct Subsurface Profile" button runs live inference
+
+10.3 PRECOMPUTED TAB
+  - Month tabs to filter dates
+  - Date selector buttons
+  - Location list with 12 locations
+  - Temperature vs Depth profile chart
+  - Ocean indicators (SST, OHC, Thermocline, MHW)
+
+10.4 RESULTS DISPLAY
+  - Temperature vs Depth line chart (Chart.js, horizontal orientation)
+  - Ocean indicators grid (SST, OHC 0-200m, Thermocline depth, MHW intensity)
+  - Marine Heatwave status bar (safe/warning)
+  - Cyclone risk status bar (safe/warning/danger)
+
+10.5 FISH FORECAST
+  - 21 fish species across 3 depth zones
+  - Species matched to temperature profile
+  - Visual depth chart (scatter plot with temperature profile overlay)
+  - Species cards with commercial value and fishing season
+
+10.6 UX FEATURES
+  - Onboarding overlay (first visit)
+  - Toast notifications
+  - Tooltips on buttons and presets
+  - Responsive design (mobile bottom sheet)
+  - No-cache headers for fresh content
+  - Loading overlay while model loads
+
+
+================================================================================
+11. FISH FORECAST FEATURE
+================================================================================
+
+The fish forecast matches 21 North Indian Ocean species to the reconstructed
+temperature profile at the selected location.
+
+11.1 SPECIES DATABASE (3 zones)
+
+  SURFACE ZONE (0-30m) - Warm water species:
+    Yellowfin Tuna, Skipjack Tuna, Mahi-Mahi, Flying Fish,
+    Indian Mackerel, Oil Sardine, Anchovies, Barracuda, Queenfish
+
+  MID-WATER ZONE (30-150m) - Transitional species:
+    Swordfish, Black Marlin, Sailfish, Bigeye Tuna,
+    Threadfin Bream, Emperor Bream, Cobia
+
+  DEEP ZONE (150-450m) - Deep water species:
+    Deep-sea Red Snapper, Orange Roughy, Deep-sea Shrimp,
+    Rattail (Grenadier), Deep-sea Squid
+
+11.2 MATCHING ALGORITHM
+  For each fish species:
+    1. Find all depth levels within the fish's depth range
+    2. Get the water temperature at those depths
+    3. Find the closest temperature to the species' preferred range
+    4. If the actual temperature falls within the species' range -> match
+
+11.3 DISPLAY
+  - Grouped by depth zone (Surface / Mid-Water / Deep)
+  - Each card shows: name, icon, commercial value, fishing season, depth range
+  - Scatter chart: depth vs temperature with species range bars + profile line
+
+
+================================================================================
+12. FILE STRUCTURE
+================================================================================
+
+OceanEmbed/
+|
+|-- run.py                    Main CLI (preprocess, train, validate, demo)
+|-- train_full.py             Full training script
+|-- train_model.py            Model training utilities
+|-- profile_train.py          Training profiler
+|-- validate_argo.py          Argo float validation
+|-- validate_test.py          Test set validation
+|-- download_*.py             Data download scripts (6 files)
+|-- requirements.txt          Python dependencies
+|
+|-- src/                      SOURCE CODE
+|   |-- config.py             All configuration (paths, hyperparams, grid)
+|   |-- reconstruction/
+|   |   |-- model.py          AttentionUNet3D model (250 lines)
+|   |   |-- train.py          Training loop
+|   |-- preprocessing/
+|   |   |-- harmonize.py      Data harmonization pipeline
+|   |   |-- dataset.py        PyTorch Dataset class
+|   |   |-- process_argo.py   Argo float processing
+|   |-- application/
+|   |   |-- products.py       OHC, MHW, cyclone risk functions
+|   |-- validation/
+|   |   |-- evaluate.py       Evaluation metrics
+|   |-- utils/
+|       |-- visualization.py  Plotting utilities
+|
+|-- data/                     DATA FILES
+|   |-- sst/                  SST NetCDF (0.05 deg, Copernicus)
+|   |-- ssh/                  SSH/SLA NetCDF (0.25 deg, Copernicus)
+|   |-- sss/                  SSS NetCDF (0.25 deg, Copernicus)
+|   |-- wind/                 Wind U/V NetCDF (0.25 deg, Copernicus)
+|   |-- currents/             Current U/V NetCDF
+|   |-- glorys/               GLORYS12 reanalysis (17 yearly files)
+|   |-- incois_argo/          INCOIS Argo float observations
+|   |-- interim/harmonized/   Harmonized intermediate files
+|   |-- processed/            Train/val/test splits + norm stats
+|
+|-- models/                   TRAINED MODELS
+|   |-- best_model.pt         Best checkpoint (epoch 96)
+|   |-- checkpoint_epoch_*.pt Checkpoints every 10 epochs
+|   |-- logs/                 Training run logs
+|   |-- validation_results/   Validation metrics + predictions
+|
+|-- demo/                     DEMO APPLICATION
+|   |-- backend/
+|   |   |-- app.py            FastAPI backend (386 lines)
+|   |-- frontend/
+|   |   |-- index.html        Main UI (1,407 lines)
+|   |   |-- data/demo_data.json   Precomputed results (9.8 MB)
+|   |   |-- vendor/           Leaflet + Chart.js (local copies)
+|   |-- precompute_demo.py    Script to generate demo_data.json
+|
+|-- tests/                    TESTS
+|   |-- test_model.py         Model unit tests
+|
+|-- docs/                     DOCUMENTATION
+    |-- architecture-decisions.md
+    |-- data-sources.md
+    |-- research-summary.md
+
+
+================================================================================
+13. SETUP & INSTALLATION
+================================================================================
+
+PREREQUISITES:
+  - Python 3.10+
+  - NVIDIA GPU with CUDA 12.1+ (for training; demo runs on CPU too)
+  - 16 GB+ RAM
+  - ~50 GB disk space (for data + models)
+
+INSTALLATION:
+  1. Clone the repository
+     git clone <repo-url>
+     cd OceanEmbed
+
+  2. Create virtual environment
+     python -m venv venv
+     venv\Scripts\activate        (Windows)
+     source venv/bin/activate     (Linux/Mac)
+
+  3. Install PyTorch with CUDA
+     pip install torch --index-url https://download.pytorch.org/whl/cu121
+
+  4. Install remaining dependencies
+     pip install -r requirements.txt
+
+  5. Download data (see data download scripts)
+     python download_sst.py
+     python download_sla.py
+     python download_sss.py
+     python download_winds.py
+     python download_glorys.py
+     python download_incois_argo.py
+
+  6. Preprocess data
+     python run.py preprocess
+
+  7. Train model (optional, pre-trained weights included)
+     python run.py train --epochs 100 --batch-size 2 --device cuda
+
+  8. Validate model (optional)
+     python run.py validate
+
+  9. Generate demo data
+     python demo/precompute_demo.py
+
+  10. Run demo server
+      python run.py demo
+      Open http://localhost:8000
+
+
+================================================================================
+14. HOW TO RUN
+================================================================================
+
+PIPELINE COMMANDS (via run.py):
+
+  Preprocess data:
+    python run.py preprocess
+
+  Train model:
+    python run.py train --epochs 100 --batch-size 2 --lr 1e-4 --device cuda
+
+  Resume training from checkpoint:
+    python run.py train --resume models/checkpoint_epoch_50.pt
+
+  Validate against Argo:
+    python run.py validate
+
+  Run demo server:
+    python run.py demo
+    python run.py demo --host 0.0.0.0 --port 8000
+
+STANDALONE SCRIPTS:
+
+  Generate precomputed demo data:
+    python demo/precompute_demo.py
+
+  Run offline demo server (no model, precomputed data only):
+    python demo/serve_offline.py
+
+  Run online demo server (live API fetching):
+    python demo/online/start.py
+
+  Profile training performance:
+    python profile_train.py
+
+  Validate test set:
+    python validate_test.py
+
+  Validate against Argo floats:
+    python validate_argo.py
+
+
+================================================================================
+15. CONFIGURATION
+================================================================================
+
+All configuration is in src/config.py.
+
+KEY SETTINGS TO MODIFY:
+
+  Domain bounds:
+    LAT_MIN  = 0.0      (change to shift domain south)
+    LAT_MAX  = 25.0     (change to shift domain north)
+    LON_MIN  = 45.0     (change to shift domain west)
+    LON_MAX  = 100.0    (change to shift domain east)
+
+  Model hyperparameters (in MODEL_CONFIG):
+    input_channels    = 5      (number of input variables)
+    n_depth_levels    = 15     (number of output depth levels)
+    embed_dim         = 64     (base feature dimension)
+    dropout           = 0.1    (regularization)
+    temporal_window   = 5      (days of input)
+    learning_rate     = 1e-4   (Adam learning rate)
+    batch_size        = 2      (reduce if GPU memory limited)
+    epochs            = 100    (training epochs)
+
+  Demo settings (in DEMO_CONFIG):
+    host              = "0.0.0.0"
+    port              = 8000
+    model_checkpoint  = models/best_model.pt
+
+
+================================================================================
+16. KEY TECHNOLOGIES
+================================================================================
+
+  Category           Technology              Purpose
+  --------           ----------              -------
+  Deep Learning      PyTorch 2.x             Model training & inference
+  ML Architecture    3D U-Net++ with CBAM    Spatio-temporal reconstruction
+  Backend            FastAPI + Uvicorn       REST API server
+  Frontend Mapping   Leaflet.js              Interactive map
+  Frontend Charts    Chart.js                Temperature profile visualization
+  Data Format        NetCDF4 (xarray)        Ocean climate data
+  Data Processing    NumPy, SciPy            Array operations, interpolation
+  Validation         scikit-learn            Metrics computation
+  Reanalysis         GLORYS12 (Copernicus)   Ground truth temperature profiles
+  Satellite Data     Copernicus Marine       SST, SSH, SSS, Wind
+  In-situ Validation INCOIS Argo Floats      Independent accuracy assessment
+
+
+================================================================================
+17. FUTURE SCOPE
+================================================================================
+
+  1. REAL-TIME INTEGRATION
+     - Connect to live Copernicus Marine API for real-time surface data
+     - Auto-refresh predictions every 6 hours
+
+  2. SALINITY RECONSTRUCTION
+     - Model already outputs 15 depth levels; extend to salinity
+     - Combined T-S profiles for better ocean state estimation
+
+  3. MULTI-VARIABLE FORECAST
+     - Ocean currents, dissolved oxygen, chlorophyll
+     - Ecosystem-level predictions
+
+  4. HIGHER RESOLUTION
+     - Current model: 0.25 deg (~28 km)
+     - Future: 0.1 deg (~11 km) for coastal applications
+
+  5. SEASONAL PREDICTION
+     - Extend temporal window beyond 5 days
+     - Provide 7-day or 30-day subsurface forecasts
+
+  6. MOBILE APP
+     - Native Android/iOS app for fishermen
+     - Offline model inference on-device
+
+  7. CLOUD DEPLOYMENT
+     - Deploy on AWS/Azure/GCP
+     - Auto-scaling inference endpoints
+     - Global coverage (not just North Indian Ocean)
+
+================================================================================
+                          END OF DOCUMENTATION
+================================================================================

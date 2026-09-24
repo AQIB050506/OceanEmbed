@@ -1,0 +1,115 @@
+{
+  "0": {
+    "rmse": 0.732216,
+    "mae": 0.669466,
+    "bias": -0.657254,
+    "correlation": 0.964475,
+    "n_points": 2662
+  },
+  "5": {
+    "rmse": 0.726343,
+    "mae": 0.661302,
+    "bias": -0.65517,
+    "correlation": 0.966944,
+    "n_points": 5564
+  },
+  "10": {
+    "rmse": 0.657239,
+    "mae": 0.569624,
+    "bias": -0.559139,
+    "correlation": 0.962335,
+    "n_points": 4829
+  },
+  "20": {
+    "rmse": 0.723147,
+    "mae": 0.571307,
+    "bias": -0.475685,
+    "correlation": 0.919479,
+    "n_points": 3181
+  },
+  "30": {
+    "rmse": 0.937219,
+    "mae": 0.626073,
+    "bias": -0.311071,
+    "correlation": 0.810051,
+    "n_points": 3091
+  },
+  "50": {
+    "rmse": 1.178787,
+    "mae": 0.793189,
+    "bias": -0.070833,
+    "correlation": 0.690504,
+    "n_points": 4274
+  },
+  "75": {
+    "rmse": 1.497299,
+    "mae": 1.116257,
+    "bias": 0.260064,
+    "correlation": 0.703779,
+    "n_points": 4207
+  },
+  "100": {
+    "rmse": 2.046437,
+    "mae": 1.631618,
+    "bias": 1.403321,
+    "correlation": 0.682896,
+    "n_points": 4380
+  },
+  "125": {
+    "rmse": 1.228568,
+    "mae": 0.918742,
+    "bias": 0.190848,
+    "correlation": 0.786273,
+    "n_points": 4231
+  },
+  "150": {
+    "rmse": 0.999445,
+    "mae": 0.723525,
+    "bias": -0.101064,
+    "correlation": 0.852272,
+    "n_points": 4236
+  },
+  "200": {
+    "rmse": 1.111022,
+    "mae": 0.821487,
+    "bias": 0.646695,
+    "correlation": 0.876205,
+    "n_points": 4293
+  },
+  "250": {
+    "rmse": 0.869109,
+    "mae": 0.477959,
+    "bias": -0.175622,
+    "correlation": 0.862608,
+    "n_points": 3010
+  },
+  "300": {
+    "rmse": 0.85153,
+    "mae": 0.450963,
+    "bias": -0.217566,
+    "correlation": 0.83455,
+    "n_points": 3060
+  },
+  "400": {
+    "rmse": 0.851717,
+    "mae": 0.286705,
+    "bias": 0.150199,
+    "correlation": 0.784425,
+    "n_points": 3041
+  },
+  "450": {
+    "rmse": 0.894787,
+    "mae": 0.261462,
+    "bias": 0.01066,
+    "correlation": 0.75659,
+    "n_points": 2866
+  },
+  "overall": {
+    "mean_rmse": 1.020324,
+    "mean_correlation": 0.830226,
+    "mean_mae": 0.705312,
+    "n_depths": 15,
+    "n_total_points": 56925,
+    "n_common_dates": 345
+  }
+}

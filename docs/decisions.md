@@ -1,0 +1,22 @@
+# Decision Log
+
+## Project: OceanEmbed — Subsurface Ocean Temperature Reconstruction
+**SIH Problem Statement ID:** SIH26066 | **Team:** Neural Shadows**
+
+Per `rules.md` §9: significant decisions get one line here with date and reasoning.
+
+| # | Date | Decision | Reasoning |
+|---|------|----------|-----------|
+| 1 | 2026-09-13 | Architecture: Attention-Enhanced 3D U-Net++ | Best fit from 6+ paper review; proven on similar NW Pacific problem |
+| 2 | 2026-09-13 | Inputs: SST + SSH + SSS + Wind(U,V) — 5 channels | Literature: SST dominates mixed layer, SSH dominates thermocline/deep |
+| 3 | 2026-09-13 | Training target: GLORYS12V1; Validation: INCOIS Argo | GLORYS is gold-standard reanalysis; Argo is independent (not assimilated) |
+| 4 | 2026-09-13 | Temporal range: 2010–2025 | Overlap window where all satellite products available |
+| 5 | 2026-09-16 | Domain: 0–25°N, 45–100°E, depths 0–450m (not PRD's 5–30°N/0–1000m) | Use downloaded data; re-downloading not feasible in timeline |
+| 6 | 2026-09-17 | temporal_window: 5 days (not 26) | 26d = 25s/batch → weeks of training; 5d = 0.3s/batch → 19 hours |
+| 7 | 2026-09-17 | batch_size: 2 (not 8) | 8 OOMs on 6GB RTX 4050 |
+| 8 | 2026-09-17 | Single-stage training (skip Argo pretrain stage) | Timeline; GLORYS-only training already achieves Argo RMSE=1.02°C |
+| 9 | 2026-09-19 | Bypass broken gridded Argo file; validate against raw floats | INCOIS gridded product had issues; raw point-matching is more honest |
+| 10 | 2026-09-19 | Density constraint loss disabled | Model predicts temperature only (no salinity); constraint needs both T and S |
+| 11 | 2026-09-24 | Demo: two-mode (FastAPI live + static offline fallback) | Judging needs offline; live inference is wow-factor when possible |
+| 12 | 2026-09-24 | Map tiles: online with automatic offline grid fallback | Esri tiles need internet; grid background keeps demo functional offline |
+| 13 | 2026-09-24 | Add ARGO overlay + SST/OHC/Anomaly map layers to demo | design.md §3.2/§3.3 requires ARGO comparison and anomaly overlay |

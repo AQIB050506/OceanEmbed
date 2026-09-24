@@ -1,0 +1,61 @@
+# OceanEmbed .gitignore
+
+# Data directories (large files, not for git)
+data/raw/
+data/interim/
+data/processed/
+data/glorys/
+data/sst/
+data/ssh/
+data/sss/
+data/wind/
+data/currents/
+data/incois_argo/
+data/*.nc
+
+# Model checkpoints
+models/*.pt
+models/*.pth
+models/logs/
+models/checkpoints/
+models/validation_results/*.nc
+
+# Large precomputed demo data (regenerate with demo/precompute_demo.py)
+demo/frontend/data/demo_data.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment
+.env
+.env.local
+
+# Temporary
+*.tmp
+*.log
