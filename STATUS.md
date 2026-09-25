@@ -68,7 +68,7 @@
   - `python run.py demo` — full FastAPI (live inference + precomputed)
   - `python demo/serve_offline.py` — static fallback (precomputed only, no Python deps needed)
 
-### 2.9 Online Demo (demo/online/) — 3D REWRITE VERIFIED (24 Sep 2026)
+### 2.9 Online Demo (demo/online/) — 3D REWRITE VERIFIED (24–25 Sep 2026)
 - [x] Realtime fetcher — Open-Meteo Marine (SST+SSH) + Weather (wind), parallel ThreadPool (12 workers, ~12s)
 - [x] Correct model input shape `(5, 5, 101, 221)` + training normalization stats (SST Kelvin conversion)
 - [x] Real SSH from API (not random) — fixed 30.8% flat-profile collapse → 0.3%
@@ -84,6 +84,11 @@
   - Domain wireframe, depth labels, floor grid, fog
   - Side panel: Chart.js profile (auto-loads default point 12.5°N/72.5°E), count-up indicators, MHW/cyclone status, staggered card reveal animations
 - [x] Headless-browser screenshot verified: scene renders, land+labels+graticule correct, minimap tiles load (pixel-analyzed: 3k+ colors, no placeholder), chart+indicators populated
+- [x] **Time Machine playback (25 Sep)** — bottom-center timeline over the last 14 days: index-linear scrub slider (oldest→newest, gradient blue→amber), play/pause steps forward ~2–4s/date, LIVE/ARCHIVE badge; archive dates built on demand from Open-Meteo **archive** API (SST+SSH+wind daily-means in **2 batched requests/date**, was 132 point-calls) → `/api/warm?date=` prefetches slider neighbors; date-keyed server entry store (≤12 archive entries, today TTL 600s); profile/volume/transect all take `date`
+- [x] **Argo float overlay (25 Sep)** — keyless GDAC: global profile index (58MB gz, background parse → 500 in-domain profiles ≤36d) + per-profile `.nc` download (QC 1/2, temp+depth arrays ≤400 levels); minimap chip toggles 500 amber circleMarkers, click → profile chart gets a **dashed amber Argo dataset** (interpolated to the 15 model depths) + badge with **colocated RMSE** (selection snaps to the float's lat/lon so the comparison is meaningful)
+- [x] **Transect A→B section (25 Sep)** — click chip, then two points on minimap/3D; server bilinear-samples the predicted cube along the line (15×90, haversine distances, land flags); **2D section canvas** in a sidebar card (linear depth axis 0–450m, shared `tempColor` ramp, olive land strips, km ticks + A/B labels) + **3D curtain** in the scene (CanvasTexture on a rotated plane from A to B, endpoint poles with A/B labels); cleared automatically on date change
+- [x] **Shareable URL params**: `?date=YYYY-MM-DD`, `?tr=lat,lon,lat,lon`, `?argo=1` — boot applies them (also used headless for verification)
+- [x] Verified end-to-end (headless Edge + CDP, zero page/console errors): default boot, slider scrub (09-25→09-17 ARCHIVE, profile refetched 26.5°C), play trace (09-12→09-16 in 14s), `?date=`, `?tr=` (4514 km section, canvas gradient orange→blue top-to-bottom, land strips 1959px, minimap polyline+poles, 3D curtain warm-above/cold-below), `?argo=1` (500 markers, click → RMSE badge), manual two-click transect + clear; **pytest 5/5**
 - [x] Start: `python demo/online/start.py` → http://localhost:8000
 
 ### 2.10 Tests & Documentation
@@ -92,7 +97,7 @@
 - [x] MODEL_REPORT.md — full model report with metrics tables
 - [x] docs/research-summary.md, docs/architecture-decisions.md (updated), docs/data-sources.md
 - [x] **experiments.md** — complete experiment log (created 24 Sep)
-- [x] **docs/decisions.md** — 13-entry decision log (created 24 Sep)
+- [x] **docs/decisions.md** — 24-entry decision log (created 24 Sep)
 
 ---
 

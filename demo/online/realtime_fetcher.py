@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 MARINE_API = "https://marine-api.open-meteo.com/v1/marine"
 WEATHER_API = "https://api.open-meteo.com/v1/forecast"
+ARCHIVE_API = "https://archive-api.open-meteo.com/v1/archive"
 
 N_LAT, N_LON = 101, 221
 TEMPORAL_WINDOW = 5
@@ -31,6 +32,46 @@ SAMPLE_LONS = np.arange(LON_MIN + 2.0, LON_MAX, 5.0)   # ~11 points
 _STATS_PATH = PROCESSED_DIR / "normalization_stats.json"
 with open(_STATS_PATH) as f:
     NORM_STATS = json.load(f)
+
+
+def _sample_coords():
+    return [(float(la), float(lo)) for la in SAMPLE_LATS for lo in SAMPLE_LONS]
+
+
+def _batch_json(url, params, timeout=60):
+    """One request for many coordinates → list of per-coordinate results (or None)."""
+    try:
+        r = requests.get(url, params=params, timeout=timeout)
+        r.raise_for_status()
+        j = r.json()
+        return j if isinstance(j, list) else [j]
+    except Exception as e:
+        logger.warning("Batch fetch %s failed: %s", url.split("/")[2], e)
+        return None
+
+
+def _csv(vals):
+    return ",".join(str(v) for v in vals)
+
+
+def _daily_mean(values):
+    vals = [v for v in values if v is not None]
+    return float(np.mean(vals)) if vals else None
+
+
+def _daily_wind_uv(speeds, dirs):
+    """Vector-mean of hourly wind → daily (u, v) in m/s (Open-Meteo met convention)."""
+    us, vs = [], []
+    for s, d in zip(speeds, dirs):
+        if s is None or d is None:
+            continue
+        ws = float(s) / 3.6  # km/h → m/s
+        rad = np.radians(float(d))
+        us.append(-ws * np.sin(rad))
+        vs.append(-ws * np.cos(rad))
+    if not us:
+        return None, None
+    return float(np.mean(us)), float(np.mean(vs))
 
 
 def _fetch_marine(lat, lon, timeout=8):
@@ -82,24 +123,38 @@ def _interp_to_grid(points, values, method="cubic"):
 
 def fetch_sst_grid(max_workers=12):
     """Fetch SST and SSH together (same marine API call). Returns (sst, ssh, source)."""
-    coords = [(la, lo) for la in SAMPLE_LATS for lo in SAMPLE_LONS]
-    logger.info("Fetching SST/SSH at %d points (%d workers)...", len(coords), max_workers)
+    coords = _sample_coords()
     sst_pts, sst_vals = [], []
     ssh_pts, ssh_vals = [], []
-    with ThreadPoolExecutor(max_workers=max_workers) as ex:
-        futs = [ex.submit(_fetch_marine, la, lo) for la, lo in coords]
-        for f in as_completed(futs):
-            lat, lon, data = f.result()
-            if data and "current" in data:
-                cur = data["current"]
-                sst = cur.get("sea_surface_temperature")
-                ssh = cur.get("sea_level_height_msl")
-                if sst is not None:
-                    sst_pts.append((lat, lon))
-                    sst_vals.append(float(sst))
-                if ssh is not None:
-                    ssh_pts.append((lat, lon))
-                    ssh_vals.append(float(ssh))
+
+    def _collect(lat, lon, sst, ssh):
+        if sst is not None:
+            sst_pts.append((lat, lon))
+            sst_vals.append(float(sst))
+        if ssh is not None:
+            ssh_pts.append((lat, lon))
+            ssh_vals.append(float(ssh))
+
+    logger.info("Fetching SST/SSH at %d points (batch)...", len(coords))
+    res = _batch_json(MARINE_API, {
+        "latitude": _csv(c[0] for c in coords),
+        "longitude": _csv(c[1] for c in coords),
+        "current": "sea_surface_temperature,sea_level_height_msl,ocean_current_velocity,ocean_current_direction",
+        "timezone": "GMT",
+    }, timeout=30)
+    if res is not None and len(res) == len(coords):
+        for (lat, lon), item in zip(coords, res):
+            cur = item.get("current") or {}
+            _collect(lat, lon, cur.get("sea_surface_temperature"), cur.get("sea_level_height_msl"))
+    else:
+        logger.info("Batch failed — falling back to per-point fetch (%d workers)", max_workers)
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            futs = [ex.submit(_fetch_marine, la, lo) for la, lo in coords]
+            for f in as_completed(futs):
+                lat, lon, data = f.result()
+                if data and "current" in data:
+                    cur = data["current"]
+                    _collect(lat, lon, cur.get("sea_surface_temperature"), cur.get("sea_level_height_msl"))
     if len(sst_vals) < 4:
         logger.warning("Only %d SST points — falling back to climatology", len(sst_vals))
         return generate_climatological_sst(), generate_climatological_ssh(), "climatology"
@@ -115,22 +170,38 @@ def fetch_sst_grid(max_workers=12):
 
 
 def fetch_wind_grid(max_workers=12):
-    coords = [(la, lo) for la in SAMPLE_LATS for lo in SAMPLE_LONS]
-    logger.info("Fetching wind at %d points...", len(coords))
+    coords = _sample_coords()
     pts, u_vals, v_vals = [], [], []
-    with ThreadPoolExecutor(max_workers=max_workers) as ex:
-        futs = [ex.submit(_fetch_weather, la, lo) for la, lo in coords]
-        for f in as_completed(futs):
-            lat, lon, data = f.result()
-            if data and "current" in data:
-                ws = data["current"].get("wind_speed_10m")
-                wd = data["current"].get("wind_direction_10m")
-                if ws is not None and wd is not None:
-                    ws_ms = float(ws) / 3.6  # km/h -> m/s
-                    wd_rad = np.radians(float(wd))
-                    pts.append((lat, lon))
-                    u_vals.append(-ws_ms * np.sin(wd_rad))
-                    v_vals.append(-ws_ms * np.cos(wd_rad))
+
+    def _collect(lat, lon, ws, wd):
+        if ws is None or wd is None:
+            return
+        ws_ms = float(ws) / 3.6
+        wd_rad = np.radians(float(wd))
+        pts.append((lat, lon))
+        u_vals.append(-ws_ms * np.sin(wd_rad))
+        v_vals.append(-ws_ms * np.cos(wd_rad))
+
+    logger.info("Fetching wind at %d points (batch)...", len(coords))
+    res = _batch_json(WEATHER_API, {
+        "latitude": _csv(c[0] for c in coords),
+        "longitude": _csv(c[1] for c in coords),
+        "current": "wind_speed_10m,wind_direction_10m",
+        "timezone": "GMT",
+    }, timeout=30)
+    if res is not None and len(res) == len(coords):
+        for (lat, lon), item in zip(coords, res):
+            cur = item.get("current") or {}
+            _collect(lat, lon, cur.get("wind_speed_10m"), cur.get("wind_direction_10m"))
+    else:
+        logger.info("Batch failed — falling back to per-point wind fetch")
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            futs = [ex.submit(_fetch_weather, la, lo) for la, lo in coords]
+            for f in as_completed(futs):
+                lat, lon, data = f.result()
+                if data and "current" in data:
+                    cur = data["current"]
+                    _collect(lat, lon, cur.get("wind_speed_10m"), cur.get("wind_direction_10m"))
     if len(u_vals) < 4:
         logger.warning("Only %d wind points — using calm conditions", len(u_vals))
         return np.zeros((N_LAT, N_LON)), np.zeros((N_LAT, N_LON)), "calm"
@@ -142,9 +213,10 @@ def fetch_wind_grid(max_workers=12):
     )
 
 
-def generate_climatological_sst():
+def generate_climatological_sst(month=None):
     lats = np.linspace(LAT_MIN, LAT_MAX, N_LAT)
-    month = datetime.now(timezone.utc).month
+    if month is None:
+        month = datetime.now(timezone.utc).month
     if month in (6, 7, 8, 9):
         base = 27.5
     elif month in (12, 1, 2):
@@ -225,6 +297,113 @@ def fetch_realtime_data():
         "timestamp": now.isoformat(),
         "sst": sst,
         "ssh": ssh,
+        "wind_u": wind_u,
+        "wind_v": wind_v,
+        "model_input": model_input,
+        "sources": {"sst": sst_src, "wind": wind_src},
+    }
+
+
+# ---------- historical (time playback) ----------
+
+def _fetch_marine_for_date(coords, date_str):
+    """Batch hourly marine vars for one date → [(lat, lon, sst_daymean, ssh_daymean)]."""
+    res = _batch_json(MARINE_API, {
+        "latitude": _csv(c[0] for c in coords),
+        "longitude": _csv(c[1] for c in coords),
+        "hourly": "sea_surface_temperature,sea_level_height_msl",
+        "start_date": date_str, "end_date": date_str,
+        "timezone": "GMT",
+    }, timeout=60)
+    if res is None or len(res) != len(coords):
+        return None
+    out = []
+    for (lat, lon), item in zip(coords, res):
+        h = item.get("hourly") or {}
+        out.append((
+            lat, lon,
+            _daily_mean(h.get("sea_surface_temperature") or []),
+            _daily_mean(h.get("sea_level_height_msl") or []),
+        ))
+    return out
+
+
+def _fetch_wind_for_date(coords, date_str):
+    """Batch hourly wind for one date (archive ERA5 → forecast fallback) → (u_pts, v_pts)."""
+    for url in (ARCHIVE_API, WEATHER_API):
+        params = {
+            "latitude": _csv(c[0] for c in coords),
+            "longitude": _csv(c[1] for c in coords),
+            "hourly": "wind_speed_10m,wind_direction_10m",
+            "start_date": date_str, "end_date": date_str,
+            "timezone": "GMT",
+        }
+        res = _batch_json(url, params, timeout=60)
+        if res is None or len(res) != len(coords):
+            continue
+        pts, u_vals, v_vals = [], [], []
+        for (lat, lon), item in zip(coords, res):
+            h = item.get("hourly") or {}
+            u, v = _daily_wind_uv(h.get("wind_speed_10m") or [], h.get("wind_direction_10m") or [])
+            if u is not None:
+                pts.append((lat, lon))
+                u_vals.append(u)
+                v_vals.append(v)
+        if len(u_vals) >= 4:
+            logger.info("Wind %s via %s: %d/%d pts", date_str, url.split("/")[2], len(pts), len(coords))
+            return pts, u_vals, v_vals
+    return None
+
+
+def fetch_data_for_date(date_str):
+    """Build model inputs for an arbitrary past date from Open-Meteo archive/historical APIs."""
+    now = datetime.now(timezone.utc)
+    logger.info("Fetching ocean data for archive date %s", date_str)
+    coords = _sample_coords()
+
+    marine = _fetch_marine_for_date(coords, date_str)
+    sst_pts, ssh_pts, sst_vals, ssh_vals = [], [], [], []
+    if marine:
+        for lat, lon, sst, ssh in marine:
+            if sst is not None:
+                sst_pts.append((lat, lon))
+                sst_vals.append(sst)
+            if ssh is not None:
+                ssh_pts.append((lat, lon))
+                ssh_vals.append(ssh)
+
+    month = int(date_str[5:7])
+    if len(sst_vals) < 4:
+        logger.warning("Archive SST unavailable for %s — climatology", date_str)
+        sst_grid = generate_climatological_sst(month)
+        sst_src = "climatology"
+    else:
+        sst_grid = _interp_to_grid(sst_pts, sst_vals)
+        sst_src = "open-meteo-archive"
+    if len(ssh_vals) >= 4:
+        ssh_grid = _interp_to_grid(ssh_pts, ssh_vals)
+        ssh_grid = ssh_grid - np.nanmean(ssh_grid)
+    else:
+        ssh_grid = generate_climatological_ssh()
+
+    wind = _fetch_wind_for_date(coords, date_str)
+    if wind:
+        pts, u_vals, v_vals = wind
+        wind_u = _interp_to_grid(pts, u_vals, method="nearest")
+        wind_v = _interp_to_grid(pts, v_vals, method="nearest")
+        wind_src = "open-meteo-archive"
+    else:
+        logger.warning("Archive wind unavailable for %s — calm", date_str)
+        wind_u = np.zeros((N_LAT, N_LON))
+        wind_v = np.zeros((N_LAT, N_LON))
+        wind_src = "calm"
+
+    model_input = build_model_input(sst_grid, ssh_grid, wind_u, wind_v)
+    return {
+        "date": date_str,
+        "timestamp": now.isoformat(),
+        "sst": sst_grid,
+        "ssh": ssh_grid,
         "wind_u": wind_u,
         "wind_v": wind_v,
         "model_input": model_input,

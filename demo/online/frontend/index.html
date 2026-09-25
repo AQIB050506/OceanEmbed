@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OceanEmbed — 3D Real-Time Subsurface Prediction</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23041020'/%3E%3Cpath d='M4 20c4-4 6 2 10-1s6 3 10-2 4 0 4 0v9H4z' fill='%234fc3f7'/%3E%3Cpath d='M4 15c4-4 6 2 10-1s6 3 10-2 4 0 4 0' stroke='%23ffee58' stroke-width='2.5' fill='none'/%3E%3C/svg%3E"/>
     <link rel="stylesheet" href="vendor/leaflet/leaflet.css"/>
     <script src="vendor/leaflet/leaflet.js"></script>
     <script src="vendor/chartjs/chart.js"></script>
@@ -72,7 +73,7 @@
         .legend .bar { width:150px; height:11px; border-radius:3px; margin:5px 0; background:linear-gradient(90deg,#0d47a1,#1976d2,#42a5f5,#ffee58,#ff9800,#f44336); }
         .legend .range { display:flex; justify-content:space-between; font-variant-numeric:tabular-nums; }
 
-        .hint { position:absolute; bottom:18px; left:50%; transform:translateX(-50%); z-index:20; background:rgba(8,20,38,0.8); border:1px solid #1e3a5f; border-radius:20px; padding:6px 16px; font-size:10.5px; color:#7eb8da; display:none; animation:hintFade 4s ease forwards; }
+        .hint { position:absolute; bottom:104px; left:50%; transform:translateX(-50%); z-index:20; background:rgba(8,20,38,0.8); border:1px solid #1e3a5f; border-radius:20px; padding:6px 16px; font-size:10.5px; color:#7eb8da; display:none; animation:hintFade 4s ease forwards; }
         @keyframes hintFade { 0%{opacity:0} 15%{opacity:1} 80%{opacity:1} 100%{opacity:.55} }
 
         .loading { position:absolute; inset:0; background:rgba(5,13,26,0.94); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:100; transition:opacity .5s; }
@@ -91,6 +92,40 @@
         #minimap { width:100%; height:172px; border-radius:6px; background:#0a1628; border:1px solid #16345c; cursor:crosshair; }
         #minimap .leaflet-container { background:#071426; font-family:inherit; }
         .minimap .mfoot { font-size:8.5px; color:#4a7ba0; text-align:center; margin-top:5px; }
+        .minimap .mtools { display:flex; gap:6px; margin-top:6px; }
+        .chip { flex:1; font-size:9px; padding:4px 6px; border-radius:11px; background:rgba(15,40,70,0.7); border:1px solid #1e3a5f; color:#7eb8da; cursor:pointer; letter-spacing:0.3px; transition:border-color .15s, color .15s, background .15s; font-family:inherit; }
+        .chip:hover { border-color:#4fc3f7; color:#4fc3f7; }
+        .chip.on { background:rgba(79,195,247,0.16); border-color:#4fc3f7; color:#4fc3f7; }
+        .chip.t.on { background:rgba(255,152,0,0.16); border-color:#ff9800; color:#ff9800; }
+
+        /* time machine (playback) */
+        .time-panel { position:absolute; left:50%; transform:translateX(-50%); bottom:16px; z-index:21; width:340px; background:rgba(8,20,38,0.9); border:1px solid #1e3a5f; border-radius:10px; padding:9px 14px 10px; display:none; flex-direction:column; gap:7px; backdrop-filter:blur(8px); }
+        .time-panel .tp-head { display:flex; align-items:center; gap:8px; }
+        .time-panel .tp-title { font-size:9px; color:#6fa8cc; text-transform:uppercase; letter-spacing:1px; }
+        .time-panel .tp-date { font-size:11.5px; font-weight:700; color:#e0e8f0; margin-left:auto; font-variant-numeric:tabular-nums; }
+        .time-panel .tp-badge { font-size:7.5px; font-weight:700; padding:2px 6px; border-radius:4px; letter-spacing:0.6px; }
+        .time-panel .tp-badge.live { background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.5); color:#10b981; }
+        .time-panel .tp-badge.archive { background:rgba(255,167,38,0.12); border:1px solid rgba(255,167,38,0.45); color:#ffa726; }
+        .time-panel .tp-row { display:flex; align-items:center; gap:11px; }
+        .tp-btn { width:26px; height:26px; flex-shrink:0; border-radius:50%; border:1px solid #1e3a5f; background:#0b2038; color:#4fc3f7; font-size:10px; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; transition:border-color .15s; }
+        .tp-btn:hover { border-color:#4fc3f7; }
+        #timeSlider { flex:1; -webkit-appearance:none; appearance:none; height:5px; border-radius:3px; background:linear-gradient(90deg,#1976d2,#42a5f5,#ffee58,#ff9800); outline:none; cursor:pointer; }
+        #timeSlider::-webkit-slider-thumb { -webkit-appearance:none; width:15px; height:15px; border-radius:50%; background:#ffa726; border:2.5px solid #041020; cursor:pointer; box-shadow:0 0 6px rgba(255,167,38,0.5); }
+        #timeSlider::-moz-range-thumb { width:15px; height:15px; border-radius:50%; background:#ffa726; border:2.5px solid #041020; cursor:pointer; }
+        .time-panel .tp-scale { display:flex; justify-content:space-between; font-size:8.5px; color:#5a8ab0; font-variant-numeric:tabular-nums; }
+        .time-panel.busy { border-color:#ffa726; }
+        .time-panel .tp-status { font-size:8.5px; color:#ffa726; }
+
+        /* argo overlay badge */
+        .argo-badge { display:flex; align-items:center; gap:7px; font-size:10.5px; background:rgba(255,167,38,0.10); border:1px solid rgba(255,167,38,0.4); color:#ffb74d; padding:5px 9px; border-radius:6px; margin-bottom:7px; }
+        .argo-badge b { color:#ffe0b2; }
+        .argo-badge .x { margin-left:auto; cursor:pointer; color:#ffa726; font-weight:700; padding:0 3px; }
+        .argo-badge .x:hover { color:#ffd180; }
+
+        /* transect section card */
+        .tr-meta { font-size:10px; color:#7eb8da; margin-bottom:6px; font-variant-numeric:tabular-nums; }
+        #trCanvas { width:100%; height:210px; display:block; border-radius:6px; background:#0a1628; border:1px solid #16345c; }
+        .tr-lbl { background:rgba(8,20,38,0.92)!important; border:1px solid #ff9800!important; color:#ff9800!important; font-weight:700; font-size:10px; box-shadow:none!important; padding:0 4px!important; border-radius:4px!important; }
         .loc-tag.land { border-color:#ff9800; color:#ff9800; }
 
         /* fish forecast (icons: Lucide, ISC license) */
@@ -153,9 +188,26 @@
             <div class="loc-tag" id="locTag"></div>
             <div class="hint" id="hint">Drag to rotate · Scroll to zoom · Click ocean or minimap to inspect</div>
 
+            <div class="time-panel" id="timePanel">
+                <div class="tp-head">
+                    <span class="tp-title">Time Machine</span>
+                    <span class="tp-date" id="tpDate">—</span>
+                    <span class="tp-badge live" id="tpBadge">LIVE</span>
+                </div>
+                <div class="tp-row">
+                    <button class="tp-btn" id="tpPlay" title="Play through history">▶</button>
+                    <input type="range" id="timeSlider" min="0" max="13" step="1" value="13" title="Scrub the last 14 days">
+                </div>
+                <div class="tp-scale"><span id="tpOld">—</span><span class="tp-status" id="tpStatus"></span><span id="tpNew">—</span></div>
+            </div>
+
             <div class="minimap" id="minimapWrap">
                 <div class="mtitle"><span>Location Map · North Indian Ocean</span><div class="dot"></div></div>
                 <div id="minimap"></div>
+                <div class="mtools">
+                    <button class="chip" id="argoBtn" title="Overlay recent Argo float profiles">◇ Argo floats</button>
+                    <button class="chip t" id="trBtn" title="Click two points (map or 3D) to draw a vertical section">⌒ Transect</button>
+                </div>
                 <div class="mfoot">Click map or 3D view to select · © Esri</div>
             </div>
 
@@ -176,7 +228,14 @@
             <div class="card">
                 <h3>Temperature vs Depth Profile</h3>
                 <div id="locInfo" style="font-size:11.5px;color:#7eb8da;margin-bottom:6px;">Click the 3D ocean to inspect a point</div>
+                <div class="argo-badge" id="argoBadge" style="display:none;"></div>
                 <div class="chart-box"><canvas id="profileChart"></canvas></div>
+            </div>
+
+            <div class="card" id="transectCard" style="display:none;">
+                <h3>Sea Section A → B<span class="chip t" id="trClear" style="flex:0 0 auto;margin-left:auto;">✕ Clear</span></h3>
+                <div class="tr-meta" id="trMeta">—</div>
+                <canvas id="trCanvas"></canvas>
             </div>
 
             <div class="card">
@@ -243,6 +302,20 @@ let profileChart = null;
 let lastProfile = null;
 let animClock = new THREE.Clock();
 let isFetching = false;
+let volMinMax = { min: 5, max: 32 };
+
+// time playback
+const PLAYBACK_DAYS = 14;
+let timelineDates = [], timeIdx = 0, tlLoading = false, tlSeq = 0;
+let playing = false, playTimer = null;
+let lastPoint = null;
+
+// argo overlay
+let argoPts = null, argoLayer = null, argoOn = false, argoOverlay = null;
+
+// transect
+let transectMode = false, transectPts = [], transectLine = null, transectMarks = [];
+let transectData = null, curtainMesh = null;
 
 // ---------- color scale ----------
 function tempColor(v, min, max) {
@@ -509,6 +582,7 @@ function buildOcean(vol) {
     let min = Infinity, max = -Infinity;
     layers.forEach(L => L.forEach(v => { if (v < min) min = v; if (v > max) max = v; }));
     if (min === Infinity) { min = 5; max = 32; }
+    volMinMax = { min, max };
     const sMin = sst ? Math.min(...sst) : min;
     const sMax = sst ? Math.max(...sst) : max;
 
@@ -649,6 +723,7 @@ function placeMarker(lat, lon, animatePop = true) {
 // unified point selection: 3D click, minimap click, default point
 function selectPoint(lat, lon, { userPicked = true, suffix = '' } = {}) {
     if (userPicked) window.__userClicked = true;
+    lastPoint = { lat, lon };
     placeMarker(lat, lon);
     const coord = lat.toFixed(2) + '°N, ' + lon.toFixed(2) + '°E';
     const tag = document.getElementById('locTag');
@@ -656,7 +731,7 @@ function selectPoint(lat, lon, { userPicked = true, suffix = '' } = {}) {
     tag.className = 'loc-tag' + (isLandPoint(lat, lon) ? ' land' : '');
     tag.style.display = 'block';
     document.getElementById('locInfo').textContent = coord + suffix;
-    fetchProfile(lat, lon);
+    fetchProfile(lat, lon, currentDateArg());
 }
 
 function isLandPoint(lat, lon) {
@@ -682,6 +757,8 @@ function onSceneClick(event) {
 
     const lon = BOUNDS.lonMin + uv.x * LON_SPAN;
     const lat = BOUNDS.latMax - uv.y * LAT_SPAN;
+
+    if (transectMode) { handleTransectClick(lat, lon); return; }
 
     if (isLandPoint(lat, lon)) {
         const tag = document.getElementById('locTag');
@@ -719,6 +796,8 @@ function initMinimap() {
     miniMap.on('click', (e) => {
         const { lat, lng } = e.latlng;
         if (lat < BOUNDS.latMin || lat > BOUNDS.latMax || lng < BOUNDS.lonMin || lng > BOUNDS.lonMax) return;
+        if (window.__lastArgoClick && Date.now() - window.__lastArgoClick < 400) return;
+        if (transectMode) { handleTransectClick(lat, lng); return; }
         if (isLandPoint(lat, lng)) {
             const tag = document.getElementById('locTag');
             tag.textContent = 'Land point — pick the ocean';
@@ -757,16 +836,26 @@ async function fetchRealtime() {
             (data.inference_time_s ? ' · inference ' + data.inference_time_s + 's' : '');
 
         document.getElementById('loadingText').textContent = 'Building 3D volume (15 depth layers)...';
-        const volR = await fetch(API + '/api/volume?stride=2');
+        const volR = await fetch(API + '/api/volume?stride=2&date=' + data.date);
         const vol = await volR.json();
         if (vol.error) throw new Error(vol.error);
         buildOcean(vol);
 
-        // default profile if user hasn't picked a point yet
-        if (!window.__userClicked) {
+        // jump timeline back to LIVE after a manual fetch
+        timeIdx = timelineDates.length - 1;
+        stopPlay();
+        updateTimePanel();
+        prefetchNeighbors();
+
+        // refresh the inspected point with live data (or pick the default)
+        if (lastPoint) {
+            placeMarker(lastPoint.lat, lastPoint.lon, false);
+            await fetchProfile(lastPoint.lat, lastPoint.lon, null);
+        } else if (!window.__userClicked) {
             selectPoint(12.5, 72.5, { userPicked: false, suffix: ' (default)' });
         }
         window.__profileLoaded = true;
+        if (!window.__qpDone) handleQueryParams();
     } catch (e) {
         document.getElementById('lastUpdate').textContent = 'Error: ' + e.message;
     } finally {
@@ -777,12 +866,12 @@ async function fetchRealtime() {
     }
 }
 
-async function fetchProfile(lat, lon) {
+async function fetchProfile(lat, lon, date = null) {
     try {
         const resp = await fetch(API + '/api/profile', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ latitude: lat, longitude: lon }),
+            body: JSON.stringify({ latitude: lat, longitude: lon, date: date || null }),
         });
         const d = await resp.json();
         if (d.error) { alert(d.error); return; }
@@ -856,26 +945,39 @@ function updateChart(d) {
     lastProfile = d;
     const ctx = document.getElementById('profileChart').getContext('2d');
     if (profileChart) profileChart.destroy();
+    const datasets = [{
+        data: d.temperature,
+        borderColor: '#4fc3f7',
+        backgroundColor: (c) => {
+            const g = c.chart.ctx.createLinearGradient(0, 0, 260, 0);
+            g.addColorStop(0, 'rgba(13,71,161,0.35)');
+            g.addColorStop(0.5, 'rgba(79,195,247,0.15)');
+            g.addColorStop(1, 'rgba(244,67,54,0.25)');
+            return g;
+        },
+        fill: true, tension: 0.42,
+        pointRadius: d.temperature.map((_, i) => (i === currentDepthIdx ? 7 : 3.5)),
+        pointBackgroundColor: d.temperature.map((_, i) => (i === currentDepthIdx ? '#ffee58' : '#4fc3f7')),
+        pointBorderColor: '#041020', pointBorderWidth: 1.5, borderWidth: 2.5,
+    }];
+    if (argoOverlay) {
+        datasets.push({
+            data: interpProfile(argoOverlay.depths, argoOverlay.temps, DEPTHS),
+            borderColor: '#ffa726',
+            backgroundColor: 'rgba(255,167,38,0.08)',
+            borderDash: [5, 4],
+            fill: false, tension: 0.35, spanGaps: false,
+            pointRadius: 3.5,
+            pointBackgroundColor: '#ffa726',
+            pointBorderColor: '#041020', pointBorderWidth: 1, borderWidth: 2,
+        });
+    }
     profileChart = new Chart(ctx, {
         type: 'line',
         plugins: [depthHighlightPlugin],
         data: {
             labels: d.depths.map(x => x + 'm'),
-            datasets: [{
-                data: d.temperature,
-                borderColor: '#4fc3f7',
-                backgroundColor: (c) => {
-                    const g = c.chart.ctx.createLinearGradient(0, 0, 260, 0);
-                    g.addColorStop(0, 'rgba(13,71,161,0.35)');
-                    g.addColorStop(0.5, 'rgba(79,195,247,0.15)');
-                    g.addColorStop(1, 'rgba(244,67,54,0.25)');
-                    return g;
-                },
-                fill: true, tension: 0.42,
-                pointRadius: d.temperature.map((_, i) => (i === currentDepthIdx ? 7 : 3.5)),
-                pointBackgroundColor: d.temperature.map((_, i) => (i === currentDepthIdx ? '#ffee58' : '#4fc3f7')),
-                pointBorderColor: '#041020', pointBorderWidth: 1.5, borderWidth: 2.5,
-            }],
+            datasets,
         },
         options: {
             responsive: true, maintainAspectRatio: false, indexAxis: 'y',
@@ -887,6 +989,7 @@ function updateChart(d) {
             plugins: { legend:{display:false} },
         },
     });
+    renderArgoBadge();
 }
 
 // ---------- indicators (count-up) ----------
@@ -1146,9 +1249,495 @@ function animate() {
     renderer.render(scene, camera);
 }
 
+// ---------- time playback (Time Machine) ----------
+function isoDay(d) { return d.toISOString().slice(0, 10); }
+
+function currentDateArg() {
+    return timeIdx === timelineDates.length - 1 ? null : timelineDates[timeIdx];
+}
+
+function updateTimePanel() {
+    if (!timelineDates.length) return;
+    const live = timeIdx === timelineDates.length - 1;
+    document.getElementById('tpDate').textContent = timelineDates[timeIdx];
+    const b = document.getElementById('tpBadge');
+    b.textContent = live ? 'LIVE' : 'ARCHIVE';
+    b.className = 'tp-badge ' + (live ? 'live' : 'archive');
+    document.getElementById('timeSlider').value = String(timeIdx);
+}
+
+function initTimeline() {
+    const now = new Date();
+    const base = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    for (let i = PLAYBACK_DAYS - 1; i >= 0; i--) {
+        timelineDates.push(isoDay(new Date(base - i * 86400000)));
+    }
+    timeIdx = timelineDates.length - 1;
+    const sl = document.getElementById('timeSlider');
+    sl.max = String(timelineDates.length - 1);
+    document.getElementById('tpOld').textContent = timelineDates[0].slice(5).replace('-', '/');
+    document.getElementById('tpNew').textContent = timelineDates[timelineDates.length - 1].slice(5).replace('-', '/');
+    updateTimePanel();
+    document.getElementById('timePanel').style.display = 'flex';
+    sl.addEventListener('change', () => { stopPlay(); gotoDate(parseInt(sl.value, 10)); });
+    document.getElementById('tpPlay').addEventListener('click', togglePlay);
+    document.getElementById('argoBtn').addEventListener('click', toggleArgo);
+    document.getElementById('trBtn').addEventListener('click', toggleTransect);
+    document.getElementById('trClear').addEventListener('click', clearTransect);
+}
+
+function stopPlay() {
+    if (playTimer) { clearTimeout(playTimer); playTimer = null; }
+    if (playing) {
+        playing = false;
+        const btn = document.getElementById('tpPlay');
+        btn.textContent = '▶';
+        btn.classList.remove('on');
+    }
+}
+
+async function togglePlay() {
+    if (playing) { stopPlay(); return; }
+    playing = true;
+    const btn = document.getElementById('tpPlay');
+    btn.textContent = '❚❚';
+    btn.classList.add('on');
+    if (timeIdx >= timelineDates.length - 1) await gotoDate(0);
+    playLoop();
+}
+
+async function playLoop() {
+    if (!playing) return;
+    if (timeIdx >= timelineDates.length - 1) { stopPlay(); return; }
+    await gotoDate(timeIdx + 1);
+    if (!playing) return;
+    playTimer = setTimeout(playLoop, 1500);
+}
+
+async function gotoDate(idx) {
+    idx = Math.max(0, Math.min(timelineDates.length - 1, idx | 0));
+    timeIdx = idx;
+    updateTimePanel();
+    const seq = ++tlSeq;
+    const date = currentDateArg();
+    tlLoading = true;
+    const st = document.getElementById('tpStatus');
+    const panel = document.getElementById('timePanel');
+    st.textContent = 'loading…';
+    panel.classList.add('busy');
+    try {
+        const volR = await fetch(API + '/api/volume?stride=2' + (date ? '&date=' + date : ''));
+        const vol = await volR.json();
+        if (seq !== tlSeq) return;
+        if (vol.error) throw new Error(vol.error);
+        buildOcean(vol);
+        clearTransect();
+        if (lastPoint) {
+            placeMarker(lastPoint.lat, lastPoint.lon, false);
+            await fetchProfile(lastPoint.lat, lastPoint.lon, date);
+        }
+        st.textContent = '';
+    } catch (e) {
+        if (seq === tlSeq) st.textContent = 'error: ' + String(e.message || e);
+    } finally {
+        if (seq === tlSeq) {
+            tlLoading = false;
+            panel.classList.remove('busy');
+            prefetchNeighbors();
+        }
+    }
+}
+
+function prefetchNeighbors() {
+    for (const j of [timeIdx - 1, timeIdx + 1]) {
+        if (j >= 0 && j < timelineDates.length - 1 && j !== timeIdx) {
+            fetch(API + '/api/warm?date=' + timelineDates[j]).catch(() => {});
+        }
+    }
+}
+
+// ---------- argo float overlay ----------
+function interpProfile(depths, temps, targets) {
+    const out = targets.map(() => null);
+    if (!depths || !temps || depths.length < 2) return out;
+    const order = depths.map((_, i) => i).sort((a, b) => depths[a] - depths[b]);
+    const ds = order.map(i => depths[i]);
+    const ts = order.map(i => temps[i]);
+    for (let k = 0; k < targets.length; k++) {
+        const t = targets[k];
+        if (!isFinite(t)) continue;
+        if (t <= ds[0]) { out[k] = t >= ds[0] - 15 ? ts[0] : null; continue; }
+        if (t >= ds[ds.length - 1]) { out[k] = ts[ts.length - 1]; continue; }
+        let j = 0;
+        while (j < ds.length - 2 && ds[j + 1] < t) j++;
+        const f = (t - ds[j]) / (ds[j + 1] - ds[j]);
+        out[k] = ts[j] + (ts[j + 1] - ts[j]) * f;
+    }
+    return out;
+}
+
+function renderArgoBadge() {
+    const el = document.getElementById('argoBadge');
+    if (!argoOverlay) { el.style.display = 'none'; return; }
+    const obs = interpProfile(argoOverlay.depths, argoOverlay.temps, DEPTHS);
+    let rmse = null;
+    if (lastProfile && lastProfile.temperature) {
+        let se = 0, n = 0;
+        DEPTHS.forEach((_, i) => {
+            const m = lastProfile.temperature[i], o = obs[i];
+            if (m != null && o != null && isFinite(m) && isFinite(o)) { se += (m - o) * (m - o); n++; }
+        });
+        if (n >= 3) rmse = Math.sqrt(se / n);
+    }
+    el.innerHTML = '<span>Argo <b>WMO ' + argoOverlay.wmo + '</b> · cycle ' + argoOverlay.cycle +
+        ' · ' + argoOverlay.date + (rmse != null ? ' · RMSE ' + rmse.toFixed(2) + '°C' : '') +
+        '</span><span class="x" id="argoX" title="Remove overlay">✕</span>';
+    el.style.display = 'flex';
+    document.getElementById('argoX').onclick = clearArgoOverlay;
+}
+
+function clearArgoOverlay() {
+    argoOverlay = null;
+    document.getElementById('argoBadge').style.display = 'none';
+    if (lastProfile) updateChart(lastProfile);
+}
+
+async function toggleArgo() {
+    const btn = document.getElementById('argoBtn');
+    const tag = document.getElementById('locTag');
+    if (argoOn) {
+        if (argoLayer && miniMap) miniMap.removeLayer(argoLayer);
+        argoOn = false;
+        btn.classList.remove('on');
+        clearArgoOverlay();
+        return;
+    }
+    if (!miniMap) return;
+    if (!argoPts) {
+        tag.textContent = 'Loading Argo float index…';
+        tag.className = 'loc-tag';
+        tag.style.display = 'block';
+        try {
+            const r = await fetch(API + '/api/argo/points');
+            const j = await r.json();
+            if (j.error) throw new Error(j.error);
+            if (!j.ready) throw new Error('Argo index still loading — try again in a few seconds');
+            argoPts = j.points;
+        } catch (e) {
+            tag.textContent = 'Argo: ' + e.message;
+            tag.className = 'loc-tag land';
+            tag.style.display = 'block';
+            return;
+        }
+    }
+    if (!argoLayer) {
+        argoLayer = L.layerGroup();
+        argoPts.forEach(p => {
+            const m = L.circleMarker([p.lat, p.lon], {
+                radius: 4.5, color: '#041020', weight: 1.2, fillColor: '#ffa726', fillOpacity: 0.92,
+            });
+            m.bindTooltip('WMO ' + p.wmo + ' · cycle ' + p.cycle + ' · ' + p.date, { direction: 'top' });
+            m.on('click', (e) => {
+                window.__lastArgoClick = Date.now();
+                if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent);
+                loadArgoProfile(p);
+            });
+            m.addTo(argoLayer);
+        });
+    }
+    argoLayer.addTo(miniMap);
+    argoOn = true;
+    btn.classList.add('on');
+    tag.textContent = 'Argo: ' + argoPts.length + ' recent profiles — click an orange dot';
+    tag.className = 'loc-tag';
+    tag.style.display = 'block';
+}
+
+async function loadArgoProfile(p) {
+    const tag = document.getElementById('locTag');
+    try {
+        const r = await fetch(API + '/api/argo/profile?f=' + encodeURIComponent(p.f));
+        const j = await r.json();
+        if (j.error) throw new Error(j.error);
+        if (!j.n || !j.depths || !j.temperature) throw new Error('no usable levels in profile');
+        argoOverlay = { wmo: p.wmo, cycle: j.cycle || p.cycle, date: j.date || p.date, depths: j.depths, temps: j.temperature };
+        selectPoint(p.lat, p.lon, { userPicked: true, suffix: ' · Argo WMO ' + argoOverlay.wmo });
+    } catch (e) {
+        tag.textContent = 'Argo profile error: ' + e.message;
+        tag.className = 'loc-tag land';
+        tag.style.display = 'block';
+    }
+}
+
+// ---------- transect (A→B section) ----------
+function toggleTransect() {
+    const btn = document.getElementById('trBtn');
+    const tag = document.getElementById('locTag');
+    transectMode = !transectMode;
+    btn.classList.toggle('on', transectMode);
+    if (transectMode) {
+        if (transectData) clearTransect();
+        transectPts = [];
+        tag.textContent = 'Transect: click point A on the map or 3D view';
+        tag.className = 'loc-tag';
+        tag.style.display = 'block';
+    } else {
+        transectPts = [];
+        tag.style.display = 'none';
+    }
+}
+
+function handleTransectClick(lat, lon) {
+    transectPts.push({ lat, lon });
+    const tag = document.getElementById('locTag');
+    if (transectPts.length === 1) {
+        tag.textContent = 'A = ' + lat.toFixed(2) + '°N, ' + lon.toFixed(2) + '°E — now click point B';
+        tag.className = 'loc-tag';
+        tag.style.display = 'block';
+        return;
+    }
+    transectMode = false;
+    document.getElementById('trBtn').classList.remove('on');
+    const a = transectPts[0], b = transectPts[1];
+    transectPts = [];
+    drawTransectLine(a, b);
+    runTransect(a, b);
+}
+
+function drawTransectLine(a, b) {
+    clearTransectLayer();
+    if (!miniMap) return;
+    transectLine = L.polyline([[a.lat, a.lon], [b.lat, b.lon]],
+        { color: '#ff9800', weight: 2.5, dashArray: '7 5', opacity: 0.95 }).addTo(miniMap);
+    for (const [p, lbl] of [[a, 'A'], [b, 'B']]) {
+        const m = L.circleMarker([p.lat, p.lon],
+            { radius: 6, color: '#ffffff', weight: 2, fillColor: '#ff9800', fillOpacity: 1 });
+        m.bindTooltip(lbl, { permanent: true, direction: 'top', className: 'tr-lbl' });
+        m.addTo(miniMap);
+        transectMarks.push(m);
+    }
+}
+
+function clearTransectLayer() {
+    if (transectLine && miniMap) miniMap.removeLayer(transectLine);
+    transectLine = null;
+    transectMarks.forEach(m => { if (miniMap) miniMap.removeLayer(m); });
+    transectMarks = [];
+}
+
+async function runTransect(a, b) {
+    const card = document.getElementById('transectCard');
+    const meta = document.getElementById('trMeta');
+    card.style.display = 'block';
+    meta.textContent = 'Computing section…';
+    try {
+        const r = await fetch(API + '/api/transect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lat0: a.lat, lon0: a.lon, lat1: b.lat, lon1: b.lon, n: 90, date: currentDateArg() }),
+        });
+        const tr = await r.json();
+        if (tr.error) throw new Error(tr.error);
+        transectData = tr;
+        const landPct = Math.round(100 * tr.land.filter(v => v).length / tr.land.length);
+        meta.textContent = Math.round(tr.total_km) + ' km · ' + tr.date +
+            ' · A ' + tr.from.lat.toFixed(1) + '°N ' + tr.from.lon.toFixed(1) + '°E → B ' +
+            tr.to.lat.toFixed(1) + '°N ' + tr.to.lon.toFixed(1) + '°E' +
+            (landPct ? ' · ' + landPct + '% land' : '');
+        drawSection(tr);
+        buildCurtain(tr);
+        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (e) {
+        meta.textContent = 'Error: ' + e.message;
+    }
+}
+
+function clearTransect() {
+    clearTransectLayer();
+    clearCurtain();
+    transectData = null;
+    transectPts = [];
+    document.getElementById('transectCard').style.display = 'none';
+}
+
+function niceStep(raw) {
+    const p = Math.pow(10, Math.floor(Math.log10(Math.max(raw, 1))));
+    const m = raw / p;
+    return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p;
+}
+
+function drawSection(tr) {
+    const cvs = document.getElementById('trCanvas');
+    const cssW = Math.max(240, cvs.clientWidth || 320);
+    const cssH = 210;
+    const dpr = window.devicePixelRatio || 1;
+    cvs.width = Math.round(cssW * dpr);
+    cvs.height = Math.round(cssH * dpr);
+    const ctx = cvs.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const mL = 36, mR = 10, mT = 16, mB = 26;
+    const W = cssW - mL - mR, H = cssH - mT - mB;
+    const n = tr.distances_km.length;
+    const depths = tr.depths;
+    const total = tr.total_km || 1;
+    const xOf = km => mL + (km / total) * W;
+    const yOf = d => mT + (d / 450) * H;
+
+    ctx.fillStyle = '#0a1628';
+    ctx.fillRect(0, 0, cssW, cssH);
+
+    // temperature cells (linear depth axis)
+    const cw = W / (n - 1);
+    for (let i = 0; i < n - 1; i++) {
+        const x0 = xOf(tr.distances_km[i]);
+        const x1 = xOf(tr.distances_km[i + 1]);
+        for (let dj = 0; dj < depths.length - 1; dj++) {
+            const vals = [tr.temps[dj][i], tr.temps[dj][i + 1], tr.temps[dj + 1][i], tr.temps[dj + 1][i + 1]]
+                .filter(v => v != null);
+            if (!vals.length) continue;
+            const v = vals.reduce((s, x) => s + x, 0) / vals.length;
+            const rgb = tempColor(v, volMinMax.min, volMinMax.max);
+            ctx.fillStyle = 'rgb(' + Math.round(rgb[0]) + ',' + Math.round(rgb[1]) + ',' + Math.round(rgb[2]) + ')';
+            ctx.fillRect(x0, yOf(depths[dj]), Math.max(x1 - x0, 1) + 0.5, yOf(depths[dj + 1]) - yOf(depths[dj]) + 0.5);
+        }
+    }
+    // land columns
+    ctx.fillStyle = '#274028';
+    for (let i = 0; i < n; i++) {
+        if (!tr.land[i]) continue;
+        const x0 = xOf(tr.distances_km[i]) - cw / 2;
+        ctx.fillRect(Math.max(x0, mL), mT, cw, H);
+    }
+
+    // frame + depth grid
+    ctx.lineWidth = 1;
+    ctx.font = '9px Segoe UI, sans-serif';
+    ctx.textBaseline = 'middle';
+    for (const dl of [0, 100, 200, 300, 450]) {
+        const y = yOf(dl);
+        ctx.strokeStyle = 'rgba(30,58,95,0.5)';
+        ctx.setLineDash([3, 4]);
+        ctx.beginPath(); ctx.moveTo(mL, y); ctx.lineTo(mL + W, y); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#7eb8da';
+        ctx.textAlign = 'right';
+        ctx.fillText(dl === 450 ? '450m' : String(dl), mL - 5, y);
+    }
+    ctx.strokeStyle = 'rgba(30,58,95,0.85)';
+    ctx.strokeRect(mL, mT, W, H);
+
+    // distance ticks
+    const step = niceStep(total / 4);
+    ctx.fillStyle = '#7eb8da';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    for (let km = 0; km <= total + 0.01; km += step) {
+        ctx.fillText(Math.round(km), xOf(km), mT + H + 6);
+    }
+
+    // A / B labels
+    ctx.fillStyle = '#ffd180';
+    ctx.font = 'bold 10px Segoe UI, sans-serif';
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'left';
+    ctx.fillText('A', mL + 3, mT + 3);
+    ctx.textAlign = 'right';
+    ctx.fillText('B', mL + W - 3, mT + 3);
+}
+
+function clearCurtain() {
+    if (!curtainMesh) return;
+    curtainMesh.children.forEach(ch => {
+        if (ch.geometry) ch.geometry.dispose();
+        if (ch.material) {
+            if (ch.material.map) ch.material.map.dispose();
+            ch.material.dispose();
+        }
+    });
+    scene.remove(curtainMesh);
+    curtainMesh = null;
+}
+
+function buildCurtain(tr) {
+    clearCurtain();
+    const depths = tr.depths;
+    const n = tr.distances_km.length;
+    if (n < 2) return;
+    const cv = document.createElement('canvas');
+    cv.width = n;
+    cv.height = depths.length;
+    const c2 = cv.getContext('2d');
+    for (let r = 0; r < depths.length; r++) {
+        for (let c = 0; c < n; c++) {
+            const v = tr.temps[r][c];
+            let col;
+            if (tr.land[c]) col = 'rgb(39,64,40)';
+            else if (v == null) col = 'rgb(13,25,45)';
+            else {
+                const rgb = tempColor(v, volMinMax.min, volMinMax.max);
+                col = 'rgb(' + Math.round(rgb[0]) + ',' + Math.round(rgb[1]) + ',' + Math.round(rgb[2]) + ')';
+            }
+            c2.fillStyle = col;
+            c2.fillRect(c, r, 1, 1);
+        }
+    }
+    const tex = new THREE.CanvasTexture(cv);
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.generateMipmaps = false;
+    const A = latLonToScene(tr.from.lat, tr.from.lon);
+    const B = latLonToScene(tr.to.lat, tr.to.lon);
+    const dx = B.x - A.x, dz = B.z - A.z;
+    const len = Math.hypot(dx, dz);
+    if (len < 1e-4) return;
+    const geo = new THREE.PlaneGeometry(len, SCENE_H, n - 1, 1);
+    const mat = new THREE.MeshBasicMaterial({
+        map: tex, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set((A.x + B.x) / 2, -SCENE_H / 2 + 0.5, (A.z + B.z) / 2);
+    mesh.rotation.y = -Math.atan2(dz, dx);
+    mesh.renderOrder = 40;
+    curtainMesh = new THREE.Group();
+    curtainMesh.add(mesh);
+    for (const [p, lbl] of [[tr.from, 'A'], [tr.to, 'B']]) {
+        const s = latLonToScene(p.lat, p.lon);
+        const ball = new THREE.Mesh(new THREE.SphereGeometry(0.55, 14, 14),
+            new THREE.MeshBasicMaterial({ color: 0xff9800 }));
+        ball.position.set(s.x, 1.2, s.z);
+        curtainMesh.add(ball);
+        const spr = makeLabelSprite(lbl, { color: '#ffe0b2', glow: 'rgba(255,152,0,0.95)', size: 46, h: 2.0 });
+        spr.position.set(s.x, 3.4, s.z);
+        curtainMesh.add(spr);
+    }
+    scene.add(curtainMesh);
+}
+
+// ---------- URL params (?date= & ?tr= & ?argo=1) ----------
+async function handleQueryParams() {
+    window.__qpDone = true;
+    const q = new URLSearchParams(location.search);
+    const dParam = q.get('date');
+    if (dParam) {
+        const i = timelineDates.indexOf(dParam);
+        if (i >= 0 && i !== timeIdx) await gotoDate(i);
+    }
+    if (q.get('argo') === '1') toggleArgo();
+    const tr = q.get('tr');
+    if (tr) {
+        const p = tr.split(',').map(Number);
+        if (p.length === 4 && p.every(v => isFinite(v))) {
+            const a = { lat: p[0], lon: p[1] }, b = { lat: p[2], lon: p[3] };
+            drawTransectLine(a, b);
+            runTransect(a, b);
+        }
+    }
+}
+
 // ---------- boot ----------
 initScene();
 initMinimap();
+initTimeline();
 animate();
 
 // auto-fetch on load

@@ -23,6 +23,9 @@ models/validation_results/*.nc
 # Large precomputed demo data (regenerate with demo/precompute_demo.py)
 demo/frontend/data/demo_data.json
 
+# Online demo runtime cache (Argo GDAC index + downloaded profiles, refetched on demand)
+demo/online/cache/
+
 # Python
 __pycache__/
 *.py[cod]
