@@ -210,6 +210,7 @@ let labelGroup = null, miniMap = null, miniMarker = null, miniDomain = null;
 let volumeData = null;
 let currentDepthIdx = 0, targetDepthIdx = 0;
 let profileChart = null;
+let lastProfile = null;
 let animClock = new THREE.Clock();
 let isFetching = false;
 
@@ -588,6 +589,7 @@ function applyDepthSlice(immediate = false) {
     }
     document.getElementById('depthVal').textContent = DEPTHS[currentDepthIdx] + 'm';
     document.getElementById('legendTitle').textContent = 'Temperature @ ' + DEPTHS[currentDepthIdx] + 'm (°C)';
+    highlightDepth(currentDepthIdx);
 }
 
 function latLonToScene(lat, lon) {
@@ -760,11 +762,71 @@ async function fetchProfile(lat, lon) {
 }
 
 // ---------- chart ----------
+// draws a dashed crosshair at the active depth row + value labels
+const depthHighlightPlugin = {
+    id: 'depthHL',
+    afterDatasetsDraw(chart) {
+        if (!lastProfile || !lastProfile.temperature) return;
+        const di = currentDepthIdx;
+        const yPix = chart.scales.y.getPixelForValue(di);
+        const { ctx, chartArea } = chart;
+        if (!isFinite(yPix)) return;
+        const temps = lastProfile.temperature;
+        const tVal = temps[di];
+
+        ctx.save();
+        // dashed line across plot
+        ctx.strokeStyle = 'rgba(255,238,88,0.9)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 5]);
+        ctx.beginPath();
+        ctx.moveTo(chartArea.left, yPix);
+        ctx.lineTo(chartArea.right, yPix);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // depth pill (top-left inside plot)
+        ctx.font = 'bold 10px Segoe UI, sans-serif';
+        const label = DEPTHS[di] + 'm';
+        const tw = ctx.measureText(label).width;
+        const px = chartArea.left + 6;
+        const py = Math.max(chartArea.top + 2, yPix - 17);
+        ctx.fillStyle = 'rgba(255,238,88,0.92)';
+        if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(px, py, tw + 12, 15, 4); ctx.fill(); }
+        else ctx.fillRect(px, py, tw + 12, 15);
+        ctx.fillStyle = '#0a1628';
+        ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.fillText(label, px + 6, py + 8);
+
+        // temperature value next to the highlighted point
+        const xPix = chart.scales.x.getPixelForValue(tVal);
+        if (isFinite(xPix)) {
+            const tStr = tVal.toFixed(1) + '°C';
+            const labelW = ctx.measureText(tStr).width;
+            let lx = xPix + 11;
+            if (lx + labelW > chartArea.right - 4) lx = xPix - 11 - labelW; // flip inside
+            ctx.fillStyle = '#ffee58';
+            ctx.fillText(tStr, lx, yPix + 3.5);
+        }
+        ctx.restore();
+    },
+};
+
+function highlightDepth(di) {
+    if (!profileChart || !lastProfile || !lastProfile.temperature) return;
+    const ds = profileChart.data.datasets[0];
+    ds.pointRadius = lastProfile.temperature.map((_, i) => (i === di ? 7 : 3.5));
+    ds.pointBackgroundColor = lastProfile.temperature.map((_, i) => (i === di ? '#ffee58' : '#4fc3f7'));
+    profileChart.update('none');
+}
+
 function updateChart(d) {
+    lastProfile = d;
     const ctx = document.getElementById('profileChart').getContext('2d');
     if (profileChart) profileChart.destroy();
     profileChart = new Chart(ctx, {
         type: 'line',
+        plugins: [depthHighlightPlugin],
         data: {
             labels: d.depths.map(x => x + 'm'),
             datasets: [{
@@ -778,7 +840,8 @@ function updateChart(d) {
                     return g;
                 },
                 fill: true, tension: 0.42,
-                pointRadius: 3.5, pointBackgroundColor: '#4fc3f7',
+                pointRadius: d.temperature.map((_, i) => (i === currentDepthIdx ? 7 : 3.5)),
+                pointBackgroundColor: d.temperature.map((_, i) => (i === currentDepthIdx ? '#ffee58' : '#4fc3f7')),
                 pointBorderColor: '#041020', pointBorderWidth: 1.5, borderWidth: 2.5,
             }],
         },
@@ -787,7 +850,7 @@ function updateChart(d) {
             animation: { duration: 700, easing: 'easeOutQuart' },
             scales: {
                 x: { title:{display:true,text:'Temperature (°C)',color:'#7eb8da',font:{size:10}}, grid:{color:'rgba(30,58,95,0.35)'}, ticks:{color:'#7eb8da',font:{size:9.5}} },
-                y: { reverse:true, title:{display:true,text:'Depth',color:'#7eb8da',font:{size:10}}, grid:{color:'rgba(30,58,95,0.35)'}, ticks:{color:'#7eb8da',font:{size:9.5}} },
+                y: { reverse:false, title:{display:true,text:'Depth',color:'#7eb8da',font:{size:10}}, grid:{color:'rgba(30,58,95,0.35)'}, ticks:{color:'#7eb8da',font:{size:9.5}} },
             },
             plugins: { legend:{display:false} },
         },
