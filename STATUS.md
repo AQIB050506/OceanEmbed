@@ -78,6 +78,7 @@
   - **Geographic context**: land mask (from test_target NaN, 40.4% land) with coastline highlight baked into textures; 5° graticule + lat/lon tick labels; 11 billboard region labels (India, Arabian Sea, Bay of Bengal...)
   - 15 stacked temperature planes, **depth slicing slider** (0–450m) with lerped opacity transitions
   - **Slider ↔ chart sync**: moving the depth bar highlights the matching row in the Temperature-vs-Depth profile (enlarged yellow point + dashed crosshair + depth pill + °C value); chart flipped to surface-at-top so highlight motion matches slider direction
+  - **Fish Forecast card** (ported from offline demo): 21-species DB matched by depth+temp at the selected point, species cards grouped by zone (surface/mid/deep) with depth badges + season/value, habitat scatter chart (zone-colored habitat segments + amber water-profile line), slider crosshair synced here too
   - Raycast click → lat/lon → profile fetch; land clicks rejected with warning tag
   - **Leaflet minimap** (bottom-left, Esri dark-gray tiles, keyless): domain outline, synced marker, click-to-select — two-way with 3D view
   - Domain wireframe, depth labels, floor grid, fog
