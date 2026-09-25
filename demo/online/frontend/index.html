@@ -92,11 +92,19 @@
         .minimap .mfoot { font-size:8.5px; color:#4a7ba0; text-align:center; margin-top:5px; }
         .loc-tag.land { border-color:#ff9800; color:#ff9800; }
 
-        /* fish forecast */
+        /* fish forecast (icons: Lucide, ISC license) */
         .fish-zone-label { font-size:10px; font-weight:700; color:#7eb8da; text-transform:uppercase; letter-spacing:0.8px; margin:10px 0 6px; padding-bottom:4px; border-bottom:1px solid #1e3a5f; }
+        .fish-zone-dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:6px; vertical-align:middle; }
         .fish-card { background:#071426; border:1px solid #1a3757; border-radius:8px; padding:8px 10px; margin-bottom:6px; display:flex; align-items:center; gap:9px; transition:border-color .2s, transform .15s; }
         .fish-card:hover { border-color:#4fc3f7; transform:translateX(2px); }
-        .fish-icon { font-size:20px; flex-shrink:0; }
+        .fish-card.surface { border-left:3px solid #22d3ee; }
+        .fish-card.mid { border-left:3px solid #64b5f6; }
+        .fish-card.deep { border-left:3px solid #818cf8; }
+        .fish-icon { flex-shrink:0; }
+        .fish-icon svg { display:block; width:18px; height:18px; }
+        .fish-icon.surface { color:#22d3ee; }
+        .fish-icon.mid { color:#64b5f6; }
+        .fish-icon.deep { color:#818cf8; }
         .fish-info { flex:1; min-width:0; }
         .fish-name { font-size:12px; font-weight:600; color:#e0e8f0; }
         .fish-meta { font-size:9.5px; color:#6fa8cc; margin-top:1px; }
@@ -105,6 +113,7 @@
         .fish-depth-badge.mid { background:rgba(100,181,246,0.12); color:#64b5f6; border:1px solid rgba(100,181,246,0.35); }
         .fish-depth-badge.deep { background:rgba(129,140,248,0.12); color:#818cf8; border:1px solid rgba(129,140,248,0.35); }
         .fish-empty { font-size:11.5px; color:#6fa8cc; text-align:center; padding:12px 6px; line-height:1.5; }
+        .fish-empty svg { display:block; width:22px; height:22px; margin:0 auto 6px; color:#3a6a9a; }
     </style>
 </head>
 <body>
@@ -184,7 +193,7 @@
             <div class="card">
                 <h3>Fish Forecast <span style="margin-left:auto;font-size:8.5px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.4);color:#10b981;padding:2px 7px;border-radius:4px;letter-spacing:0.5px;font-weight:700;">FISHERMAN AID</span></h3>
                 <div id="fishChartBox" style="height:210px;position:relative;margin-bottom:10px;display:none;"><canvas id="fishChart"></canvas></div>
-                <div id="fishSpeciesList"><div class="fish-empty">Select a point on the 3D ocean or minimap to see species matched to its depth &amp; temperature profile</div></div>
+                <div id="fishSpeciesList"><div class="fish-empty"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 12c.94-3.46 4.94-6 8.5-6 3.56 0 6.06 2.54 7 6-.94 3.47-3.44 6-7 6s-7.56-2.53-8.5-6Z"/><path d="M18 12v.5"/><path d="M16 17.93a9.77 9.77 0 0 1 0-11.86"/><path d="M7 10.67C7 8 5.58 5.97 2.73 5.5c-1 1.5-1 5 .23 6.5-1.24 1.5-1.24 5-.23 6.5C5.58 18.03 7 16 7 13.33"/><path d="M10.46 7.26C10.2 5.88 9.17 4.24 8 3h5.8a2 2 0 0 1 1.98 1.67l.23 1.4"/><path d="m16.01 17.93-.23 1.4A2 2 0 0 1 13.8 21H9.5a5.96 5.96 0 0 0 1.49-3.98"/></svg>Select a point on the 3D ocean or minimap to see species matched to its depth &amp; temperature profile</div></div>
             </div>
 
             <div class="card">
@@ -923,33 +932,39 @@ function updateIndicators(d) {
 }
 
 // ---------- fish forecast (ported from offline demo) ----------
+// Icons: Lucide (ISC license), vendored inline — https://lucide.dev
+const FISH_ICONS = {
+    fish: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 12c.94-3.46 4.94-6 8.5-6 3.56 0 6.06 2.54 7 6-.94 3.47-3.44 6-7 6s-7.56-2.53-8.5-6Z"/><path d="M18 12v.5"/><path d="M16 17.93a9.77 9.77 0 0 1 0-11.86"/><path d="M7 10.67C7 8 5.58 5.97 2.73 5.5c-1 1.5-1 5 .23 6.5-1.24 1.5-1.24 5-.23 6.5C5.58 18.03 7 16 7 13.33"/><path d="M10.46 7.26C10.2 5.88 9.17 4.24 8 3h5.8a2 2 0 0 1 1.98 1.67l.23 1.4"/><path d="m16.01 17.93-.23 1.4A2 2 0 0 1 13.8 21H9.5a5.96 5.96 0 0 0 1.49-3.98"/></svg>',
+    shrimp: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2a3.28 3.28 0 0 0 3.227 1.798l6.17-.561A1 1 0 1 1 19.614 8H8.5a6.44 6.44 0 0 0-5.63 9.75A6.5 6.5 0 0 0 8.5 21c1.38 0 2-.5 2.5-1"/><path d="M10 8a8.5 8.5 0 0 0 0 8"/><path d="M11 22c-.5-.5-1.12-1-2.5-1a1 1 0 0 1 0-5H12a7 7 0 0 0 7-7V8"/><path d="M13 12h.01"/><path d="M8 16c-2 0-4.5-4-4-6"/></svg>',
+    shell: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 11a2 2 0 1 1-4 0 4 4 0 0 1 8 0 6 6 0 0 1-12 0 8 8 0 0 1 16 0 10 10 0 1 1-20 0 11.93 11.93 0 0 1 2.42-7.22 2 2 0 1 1 3.16 2.44"/></svg>',
+};
 const FISH_DB = [
     // Surface (0-30m) — warm water species
-    { name: 'Yellowfin Tuna', icon: '🐟', depthMin: 0, depthMax: 100, tempMin: 22, tempMax: 31, zone: 'surface', value: 'High commercial value', season: 'Oct-Mar' },
-    { name: 'Skipjack Tuna', icon: '🐟', depthMin: 0, depthMax: 60, tempMin: 24, tempMax: 30, zone: 'surface', value: 'High commercial value', season: 'Jun-Oct' },
-    { name: 'Mahi-Mahi (Dolphinfish)', icon: '🐠', depthMin: 0, depthMax: 40, tempMin: 24, tempMax: 30, zone: 'surface', value: 'Moderate value', season: 'Sep-Mar' },
-    { name: 'Flying Fish', icon: '🐟', depthMin: 0, depthMax: 20, tempMin: 23, tempMax: 30, zone: 'surface', value: 'Moderate value', season: 'Oct-Feb' },
-    { name: 'Indian Mackerel', icon: '🐟', depthMin: 0, depthMax: 50, tempMin: 22, tempMax: 29, zone: 'surface', value: 'High demand local', season: 'Jun-Sep' },
-    { name: 'Sardines (Oil Sardine)', icon: '🐟', depthMin: 0, depthMax: 40, tempMin: 22, tempMax: 28, zone: 'surface', value: 'High demand local', season: 'Jun-Nov' },
-    { name: 'Anchovies', icon: '🐟', depthMin: 0, depthMax: 30, tempMin: 22, tempMax: 29, zone: 'surface', value: 'Moderate value', season: 'May-Oct' },
-    { name: 'Barracuda', icon: '🐟', depthMin: 5, depthMax: 50, tempMin: 22, tempMax: 30, zone: 'surface', value: 'Good value', season: 'Oct-Apr' },
-    { name: 'Queenfish', icon: '🐠', depthMin: 5, depthMax: 40, tempMin: 24, tempMax: 30, zone: 'surface', value: 'Moderate value', season: 'Nov-Mar' },
+    { name: 'Yellowfin Tuna', icon: 'fish', depthMin: 0, depthMax: 100, tempMin: 22, tempMax: 31, zone: 'surface', value: 'High commercial value', season: 'Oct-Mar' },
+    { name: 'Skipjack Tuna', icon: 'fish', depthMin: 0, depthMax: 60, tempMin: 24, tempMax: 30, zone: 'surface', value: 'High commercial value', season: 'Jun-Oct' },
+    { name: 'Mahi-Mahi (Dolphinfish)', icon: 'fish', depthMin: 0, depthMax: 40, tempMin: 24, tempMax: 30, zone: 'surface', value: 'Moderate value', season: 'Sep-Mar' },
+    { name: 'Flying Fish', icon: 'fish', depthMin: 0, depthMax: 20, tempMin: 23, tempMax: 30, zone: 'surface', value: 'Moderate value', season: 'Oct-Feb' },
+    { name: 'Indian Mackerel', icon: 'fish', depthMin: 0, depthMax: 50, tempMin: 22, tempMax: 29, zone: 'surface', value: 'High demand local', season: 'Jun-Sep' },
+    { name: 'Sardines (Oil Sardine)', icon: 'fish', depthMin: 0, depthMax: 40, tempMin: 22, tempMax: 28, zone: 'surface', value: 'High demand local', season: 'Jun-Nov' },
+    { name: 'Anchovies', icon: 'fish', depthMin: 0, depthMax: 30, tempMin: 22, tempMax: 29, zone: 'surface', value: 'Moderate value', season: 'May-Oct' },
+    { name: 'Barracuda', icon: 'fish', depthMin: 5, depthMax: 50, tempMin: 22, tempMax: 30, zone: 'surface', value: 'Good value', season: 'Oct-Apr' },
+    { name: 'Queenfish', icon: 'fish', depthMin: 5, depthMax: 40, tempMin: 24, tempMax: 30, zone: 'surface', value: 'Moderate value', season: 'Nov-Mar' },
 
     // Mid-water (30-150m) — transitional zone
-    { name: 'Swordfish', icon: '🗡️', depthMin: 50, depthMax: 300, tempMin: 15, tempMax: 28, zone: 'mid', value: 'Very high value', season: 'Nov-Mar' },
-    { name: 'Marlin (Black)', icon: '🗡️', depthMin: 40, depthMax: 250, tempMin: 18, tempMax: 28, zone: 'mid', value: 'Premium value', season: 'Oct-Mar' },
-    { name: 'Sailfish', icon: '🗡️', depthMin: 30, depthMax: 200, tempMin: 20, tempMax: 28, zone: 'mid', value: 'Premium value', season: 'Nov-Mar' },
-    { name: 'Bigeye Tuna', icon: '🐟', depthMin: 50, depthMax: 250, tempMin: 15, tempMax: 27, zone: 'mid', value: 'Very high value', season: 'Nov-Apr' },
-    { name: 'Threadfin Bream', icon: '🐠', depthMin: 30, depthMax: 150, tempMin: 16, tempMax: 26, zone: 'mid', value: 'Good value', season: 'Oct-Mar' },
-    { name: 'Emperor Bream', icon: '🐠', depthMin: 40, depthMax: 180, tempMin: 16, tempMax: 26, zone: 'mid', value: 'Good value', season: 'Nov-Mar' },
-    { name: 'Cobia', icon: '🐟', depthMin: 20, depthMax: 120, tempMin: 18, tempMax: 30, zone: 'mid', value: 'High value', season: 'Oct-Feb' },
+    { name: 'Swordfish', icon: 'fish', depthMin: 50, depthMax: 300, tempMin: 15, tempMax: 28, zone: 'mid', value: 'Very high value', season: 'Nov-Mar' },
+    { name: 'Marlin (Black)', icon: 'fish', depthMin: 40, depthMax: 250, tempMin: 18, tempMax: 28, zone: 'mid', value: 'Premium value', season: 'Oct-Mar' },
+    { name: 'Sailfish', icon: 'fish', depthMin: 30, depthMax: 200, tempMin: 20, tempMax: 28, zone: 'mid', value: 'Premium value', season: 'Nov-Mar' },
+    { name: 'Bigeye Tuna', icon: 'fish', depthMin: 50, depthMax: 250, tempMin: 15, tempMax: 27, zone: 'mid', value: 'Very high value', season: 'Nov-Apr' },
+    { name: 'Threadfin Bream', icon: 'fish', depthMin: 30, depthMax: 150, tempMin: 16, tempMax: 26, zone: 'mid', value: 'Good value', season: 'Oct-Mar' },
+    { name: 'Emperor Bream', icon: 'fish', depthMin: 40, depthMax: 180, tempMin: 16, tempMax: 26, zone: 'mid', value: 'Good value', season: 'Nov-Mar' },
+    { name: 'Cobia', icon: 'fish', depthMin: 20, depthMax: 120, tempMin: 18, tempMax: 30, zone: 'mid', value: 'High value', season: 'Oct-Feb' },
 
     // Deep (150-450m) — deep water species
-    { name: 'Deep-sea Red Snapper', icon: '🐠', depthMin: 100, depthMax: 400, tempMin: 8, tempMax: 20, zone: 'deep', value: 'High value', season: 'Year-round' },
-    { name: 'Orange Roughy', icon: '🐠', depthMin: 200, depthMax: 450, tempMin: 6, tempMax: 12, zone: 'deep', value: 'Premium value', season: 'Year-round' },
-    { name: 'Deep-sea Shrimp', icon: '🦐', depthMin: 150, depthMax: 400, tempMin: 6, tempMax: 16, zone: 'deep', value: 'Very high value', season: 'Nov-Feb' },
-    { name: 'Rattail (Grenadier)', icon: '🐟', depthMin: 200, depthMax: 450, tempMin: 4, tempMax: 10, zone: 'deep', value: 'Moderate value', season: 'Year-round' },
-    { name: 'Deep-sea Squid', icon: '🦑', depthMin: 150, depthMax: 400, tempMin: 6, tempMax: 15, zone: 'deep', value: 'High value', season: 'Oct-Mar' },
+    { name: 'Deep-sea Red Snapper', icon: 'fish', depthMin: 100, depthMax: 400, tempMin: 8, tempMax: 20, zone: 'deep', value: 'High value', season: 'Year-round' },
+    { name: 'Orange Roughy', icon: 'fish', depthMin: 200, depthMax: 450, tempMin: 6, tempMax: 12, zone: 'deep', value: 'Premium value', season: 'Year-round' },
+    { name: 'Deep-sea Shrimp', icon: 'shrimp', depthMin: 150, depthMax: 400, tempMin: 6, tempMax: 16, zone: 'deep', value: 'Very high value', season: 'Nov-Feb' },
+    { name: 'Rattail (Grenadier)', icon: 'fish', depthMin: 200, depthMax: 450, tempMin: 4, tempMax: 10, zone: 'deep', value: 'Moderate value', season: 'Year-round' },
+    { name: 'Deep-sea Squid', icon: 'shell', depthMin: 150, depthMax: 400, tempMin: 6, tempMax: 15, zone: 'deep', value: 'High value', season: 'Oct-Mar' },
 ];
 
 let fishChart = null;
@@ -1011,7 +1026,7 @@ function renderFishForecast(depths, temps) {
     const container = document.getElementById('fishSpeciesList');
     const chartBox = document.getElementById('fishChartBox');
     if (!matched.length) {
-        container.innerHTML = '<div class="fish-empty">No species matched current conditions at this location.</div>';
+        container.innerHTML = '<div class="fish-empty">' + FISH_ICONS.fish + 'No species matched current conditions at this location.</div>';
         chartBox.style.display = 'none';
         if (fishChart) { fishChart.destroy(); fishChart = null; }
         return;
@@ -1022,14 +1037,14 @@ function renderFishForecast(depths, temps) {
     matched.forEach(f => zones[f.zone].push(f));
 
     const zoneLabels = { surface: 'Surface Zone (0–30m)', mid: 'Mid-Water Zone (30–150m)', deep: 'Deep Zone (150–450m)' };
-    const zoneIcons = { surface: '🌊', mid: '🌀', deep: '🌑' };
+    const zoneDots = { surface: '#22d3ee', mid: '#64b5f6', deep: '#818cf8' };
     let html = '';
     ['surface', 'mid', 'deep'].forEach(zone => {
         if (!zones[zone].length) return;
-        html += '<div class="fish-zone-label">' + zoneIcons[zone] + ' ' + zoneLabels[zone] + '</div>';
+        html += '<div class="fish-zone-label"><span class="fish-zone-dot" style="background:' + zoneDots[zone] + '"></span>' + zoneLabels[zone] + '</div>';
         zones[zone].forEach(f => {
-            html += '<div class="fish-card">' +
-                '<div class="fish-icon">' + f.icon + '</div>' +
+            html += '<div class="fish-card ' + f.zone + '">' +
+                '<div class="fish-icon ' + f.zone + '">' + (FISH_ICONS[f.icon] || FISH_ICONS.fish) + '</div>' +
                 '<div class="fish-info">' +
                     '<div class="fish-name">' + f.name + '</div>' +
                     '<div class="fish-meta">' + f.value + ' · Season: ' + f.season + '</div>' +
