@@ -65,7 +65,8 @@
         #depthSlider { position:absolute; width:220px; height:6px; top:50%; left:50%; transform:translate(-50%,-50%) rotate(90deg); -webkit-appearance:none; appearance:none; background:linear-gradient(to right,#f44336,#ff9800,#ffee58,#42a5f5,#1976d2,#0d47a1); border-radius:3px; outline:none; cursor:pointer; }
         #depthSlider::-webkit-slider-thumb { -webkit-appearance:none; width:20px; height:20px; background:#4fc3f7; border:3px solid #041020; border-radius:50%; cursor:pointer; box-shadow:0 0 10px rgba(79,195,247,0.7); }
         #depthSlider::-moz-range-thumb { width:20px; height:20px; background:#4fc3f7; border:3px solid #041020; border-radius:50%; cursor:pointer; }
-        .depth-ticks { display:flex; flex-direction:column; justify-content:space-between; height:220px; position:absolute; right:-30px; top:0; font-size:8px; color:#5a8ab0; }
+        .depth-ticks { position:absolute; right:-30px; top:0; height:220px; font-size:8px; color:#5a8ab0; }
+        .depth-ticks span { position:absolute; right:0; transform:translateY(-50%); line-height:1; }
 
         .legend { position:absolute; bottom:18px; right:14px; z-index:20; background:rgba(8,20,38,0.88); border:1px solid #1e3a5f; border-radius:8px; padding:9px 11px; font-size:9.5px; color:#7eb8da; display:none; backdrop-filter:blur(8px); }
         .legend .bar { width:150px; height:11px; border-radius:3px; margin:5px 0; background:linear-gradient(90deg,#0d47a1,#1976d2,#42a5f5,#ffee58,#ff9800,#f44336); }
@@ -138,7 +139,7 @@
                 <div class="slider-wrap">
                     <input type="range" id="depthSlider" min="0" max="14" value="0" step="1">
                     <div class="depth-ticks">
-                        <span>0</span><span>100</span><span>200</span><span>300</span><span>450</span>
+                        <span style="top:10px">0</span><span style="top:110px">100</span><span style="top:152.9px">200</span><span style="top:181.4px">300</span><span style="top:210px">450</span>
                     </div>
                 </div>
             </div>

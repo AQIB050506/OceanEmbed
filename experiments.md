@@ -175,3 +175,4 @@ Per `rules.md` §3: every architecture/hyperparameter/metrics run gets logged he
 | temporal_window=10 retrain | Not run | Expected +2-4% R² |
 | OHC validation vs known cyclone events | Not run | e.g., Cyclone Amphan May 2020 |
 | Full-test-set application products | Not run | Only 12 precompute dates done |
+**Depth-bar tick fix (25 Sep):** ticks were flex space-between (evenly spaced) while the range thumb is index-linear (15 levels → center = 10 + idx/14 × 200px) — mid labels lied (200 label sat at the 100m thumb spot, so 75m appeared next to 200); ticks now absolutely positioned at thumb formula (0/100/200/300/450 → top 10/110/152.9/181.4/210px); verified by pixel measurement: default thumb center =   label center = y315.5 exact, all 5 labels within ±0.6px, temporary value=7 shot put thumb center at y415.5 = 100 label center exact
