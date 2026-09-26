@@ -3,7 +3,6 @@ Online demo backend for OceanEmbed.
 Fetches real-time satellite data, runs model inference, serves results.
 Adds time-playback (historical dates), Argo overlay, and transect endpoints.
 """
-import torch
 import numpy as np
 import json
 import time
@@ -13,13 +12,13 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.config import (
     MODELS_DIR, PROCESSED_DIR, DEPTH_LEVELS,
     LAT_MIN, LAT_MAX, LON_MIN, LON_MAX, RESOLUTION,
 )
-from src.reconstruction.model import AttentionUNet3D
 from src.application.products import (
     compute_ocean_heat_content,
     detect_marine_heatwave,
@@ -29,7 +28,8 @@ from realtime_fetcher import fetch_realtime_data, fetch_data_for_date
 
 logger = logging.getLogger(__name__)
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+ASSETS_DIR = Path(__file__).parent / "assets"
+ONNX_MODEL_PATH = ASSETS_DIR / "model.onnx"
 
 PLAYBACK_DAYS = 14
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -37,26 +37,51 @@ ARGO_FILE_RE = re.compile(r"^[A-Za-z0-9_\-]+/\d+/profiles/[A-Za-z]\d+_\d+\.nc$")
 
 
 class RealtimeInferenceEngine:
+    """ONNX Runtime when assets/model.onnx exists (Vercel + local default),
+    torch fallback otherwise (original GPU path)."""
 
     def __init__(self):
         self.model = None
+        self.device = None
+        self.session = None
         self.norm_stats = None
 
+    @staticmethod
+    def _load_norm_stats():
+        for p in (ASSETS_DIR / "norm_stats.json", PROCESSED_DIR / "normalization_stats.json"):
+            if p.exists():
+                with open(p) as f:
+                    return json.load(f)
+        raise FileNotFoundError("normalization_stats.json not found")
+
     def load_model(self):
-        ckpt = torch.load(MODELS_DIR / "best_model.pt", map_location=DEVICE, weights_only=False)
+        self.norm_stats = self._load_norm_stats()
+        if ONNX_MODEL_PATH.exists():
+            import onnxruntime as ort
+            self.session = ort.InferenceSession(
+                str(ONNX_MODEL_PATH), providers=["CPUExecutionProvider"]
+            )
+            logger.info("ONNX model loaded (%.1f MB)", ONNX_MODEL_PATH.stat().st_size / 1e6)
+            return
+        import torch
+        from src.reconstruction.model import AttentionUNet3D
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        ckpt = torch.load(MODELS_DIR / "best_model.pt", map_location=self.device, weights_only=False)
         self.model = AttentionUNet3D()
         self.model.load_state_dict(ckpt["model_state_dict"])
         self.model.eval()
-        self.model.to(DEVICE)
-        with open(PROCESSED_DIR / "normalization_stats.json") as f:
-            self.norm_stats = json.load(f)
+        self.model.to(self.device)
         logger.info("Model loaded (epoch %d)", ckpt.get("epoch", -1))
 
-    @torch.no_grad()
     def predict(self, model_input):
-        tensor = torch.from_numpy(model_input).float().unsqueeze(0).to(DEVICE)
-        output = self.model(tensor)
-        pred = output.cpu().numpy()[0]
+        x = np.asarray(model_input, dtype=np.float32)
+        if self.session is not None:
+            pred = self.session.run(None, {"input": x[None]})[0][0]
+        else:
+            import torch
+            with torch.no_grad():
+                tensor = torch.from_numpy(x).unsqueeze(0).to(self.device)
+                pred = self.model(tensor).cpu().numpy()[0]
         mean = self.norm_stats["thetao"]["mean"]
         std = self.norm_stats["thetao"]["std"]
         return pred * std + mean
@@ -89,7 +114,10 @@ def is_flat_profile(temps):
 
 
 def load_land_mask():
-    """Land mask (True=land) from NaN cells in test_target.nc, computed once."""
+    """Land mask (True=land): precomputed npy (deploy) or test_target.nc NaNs (local)."""
+    npy = ASSETS_DIR / "land_mask.npy"
+    if npy.exists():
+        return np.load(npy)
     import xarray as xr
     with xr.open_dataset(PROCESSED_DIR / "test_target.nc") as ds:
         t = ds["thetao"].isel(time=0).values
@@ -116,77 +144,92 @@ def validate_date(date_str):
 
 # ---------- Argo GDAC ----------
 
-ARGO_CACHE_DIR = Path(__file__).parent / "cache"
+import os
+
+if os.environ.get("VERCEL") or os.environ.get("ARGO_CACHE_DIR"):
+    ARGO_CACHE_DIR = Path(os.environ.get("ARGO_CACHE_DIR", "/tmp/oceanembed_argo"))
+else:
+    ARGO_CACHE_DIR = Path(__file__).parent / "cache"
 ARGO_INDEX_GZ = ARGO_CACHE_DIR / "argo_index.txt.gz"
 ARGO_POINTS_CSV = ARGO_CACHE_DIR / "argo_points.csv"
+ARGO_POINTS_FALLBACK = ASSETS_DIR / "argo_points.csv"
 ARGO_PROF_DIR = ARGO_CACHE_DIR / "profiles"
 ARGO_BASE = "https://data-argo.ifremer.fr/dac/"
 
 
-def load_argo_points(max_points=500, max_age_days=180):
-    """Recent in-domain profiles from the GDAC global index (cached subset CSV)."""
-    import pandas as pd
-    ARGO_CACHE_DIR.mkdir(exist_ok=True)
-    if ARGO_POINTS_CSV.exists() and time.time() - ARGO_POINTS_CSV.stat().st_mtime < 7 * 86400:
-        df = pd.read_csv(ARGO_POINTS_CSV)
-    else:
-        if not ARGO_INDEX_GZ.exists():
-            raise FileNotFoundError("argo_index.txt.gz not downloaded")
-        df = pd.read_csv(ARGO_INDEX_GZ, comment="#", compression="gzip",
-                         usecols=["file", "date", "latitude", "longitude", "ocean"],
-                         dtype={"date": "str"})
-        df = df[df["ocean"] == "I"]
-        df = df[(df["latitude"] >= LAT_MIN) & (df["latitude"] <= LAT_MAX) &
-                (df["longitude"] >= LON_MIN) & (df["longitude"] <= LON_MAX)]
-        dt = pd.to_datetime(df["date"], format="%Y%m%d%H%M%S", errors="coerce")
-        df = df.assign(_dt=dt).dropna(subset=["_dt"])
-        cutoff = pd.Timestamp(datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=max_age_days))
-        df = df[df["_dt"] >= cutoff].sort_values("_dt", ascending=False).head(max_points)
-        df["dt"] = df["_dt"].dt.strftime("%Y-%m-%d")
-        df[["file", "date", "latitude", "longitude", "dt"]].to_csv(ARGO_POINTS_CSV, index=False)
+def _read_points_csv(path):
+    import csv
+    with open(path, newline="") as f:
+        rows = list(csv.DictReader(f))
     points = []
-    for r in df.itertuples(index=False):
-        parts = str(r.file).split("/")
+    for r in rows:
+        parts = str(r["file"]).split("/")
         if len(parts) < 3:
             continue
         wmo = parts[1]
         cyc = Path(parts[-1]).stem.split("_")[-1].lstrip("0") or "0"
         points.append({
-            "f": str(r.file), "wmo": wmo, "cycle": cyc,
-            "date": str(r.dt), "lat": float(r.latitude), "lon": float(r.longitude),
+            "f": str(r["file"]), "wmo": wmo, "cycle": cyc,
+            "date": str(r["dt"]), "lat": float(r["latitude"]), "lon": float(r["longitude"]),
         })
     return points
+
+
+def load_argo_points(max_points=500, max_age_days=180):
+    """Recent in-domain profiles from the GDAC global index (cached subset CSV)."""
+    ARGO_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    if ARGO_POINTS_CSV.exists() and time.time() - ARGO_POINTS_CSV.stat().st_mtime < 7 * 86400:
+        return _read_points_csv(ARGO_POINTS_CSV)
+    if not ARGO_INDEX_GZ.exists():
+        if ARGO_POINTS_FALLBACK.exists():
+            return _read_points_csv(ARGO_POINTS_FALLBACK)
+        raise FileNotFoundError("argo_index.txt.gz not downloaded")
+    import pandas as pd
+    df = pd.read_csv(ARGO_INDEX_GZ, comment="#", compression="gzip",
+                     usecols=["file", "date", "latitude", "longitude", "ocean"],
+                     dtype={"date": "str"})
+    df = df[df["ocean"] == "I"]
+    df = df[(df["latitude"] >= LAT_MIN) & (df["latitude"] <= LAT_MAX) &
+            (df["longitude"] >= LON_MIN) & (df["longitude"] <= LON_MAX)]
+    dt = pd.to_datetime(df["date"], format="%Y%m%d%H%M%S", errors="coerce")
+    df = df.assign(_dt=dt).dropna(subset=["_dt"])
+    cutoff = pd.Timestamp(datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=max_age_days))
+    df = df[df["_dt"] >= cutoff].sort_values("_dt", ascending=False).head(max_points)
+    df["dt"] = df["_dt"].dt.strftime("%Y-%m-%d")
+    df[["file", "date", "latitude", "longitude", "dt"]].to_csv(ARGO_POINTS_CSV, index=False)
+    return _read_points_csv(ARGO_POINTS_CSV)
 
 
 def load_argo_profile(file_rel):
     """Download + parse one Argo profile NetCDF → QC'd depths/temps."""
     if not ARGO_FILE_RE.match(file_rel or ""):
         raise ValueError("bad profile path")
-    import xarray as xr
+    import netCDF4 as nc4
     import requests
-    ARGO_PROF_DIR.mkdir(exist_ok=True)
+    ARGO_PROF_DIR.mkdir(parents=True, exist_ok=True)
     local = ARGO_PROF_DIR / file_rel.replace("/", "_")
     if not local.exists():
         r = requests.get(ARGO_BASE + file_rel, timeout=30)
         r.raise_for_status()
         local.write_bytes(r.content)
-    with xr.open_dataset(local) as ds:
-        temp = np.asarray(ds["TEMP"].values[0], dtype=float)
-        qc = ds["TEMP_QC"].values[0] if "TEMP_QC" in ds else None
-        if "DEPTH" in ds:
-            depth = np.asarray(ds["DEPTH"].values[0], dtype=float)
-        elif "PRES" in ds:
-            depth = np.asarray(ds["PRES"].values[0], dtype=float)
+    with nc4.Dataset(local) as ds:
+        v = ds.variables
+        temp = np.ma.filled(np.ma.asarray(v["TEMP"][0, :]), np.nan).astype(float)
+        qc = np.ma.asarray(v["TEMP_QC"][0, :]) if "TEMP_QC" in v else None
+        if "DEPTH" in v:
+            depth = np.ma.filled(np.ma.asarray(v["DEPTH"][0, :]), np.nan).astype(float)
+        elif "PRES" in v:
+            depth = np.ma.filled(np.ma.asarray(v["PRES"][0, :]), np.nan).astype(float)
         else:
             raise ValueError("no DEPTH/PRES in profile")
         cycle = None
-        if "CYCLE_NUMBER" in ds:
-            cycle = int(np.asarray(ds["CYCLE_NUMBER"].values).ravel()[0])
+        if "CYCLE_NUMBER" in v:
+            cycle = int(np.ravel(np.ma.filled(v["CYCLE_NUMBER"][:], -1))[0])
         prof_date = None
-        if "JULD" in ds:
-            juld = float(np.asarray(ds["JULD"].values).ravel()[0])
+        if "JULD" in v:
+            juld = float(np.ravel(np.ma.filled(v["JULD"][:], np.nan))[0])
             if np.isfinite(juld) and 0 < juld < 100000:
-                prof_date = (datetime(1950, 11, 11) + timedelta(days=juld)).strftime("%Y-%m-%d")
+                prof_date = (datetime(1950, 1, 1) + timedelta(days=juld)).strftime("%Y-%m-%d")
     mask = np.isfinite(temp) & np.isfinite(depth) & (depth >= 0)
     if qc is not None:
         q = np.array([str(x).strip() for x in np.asarray(qc).ravel()])

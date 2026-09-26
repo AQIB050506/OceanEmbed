@@ -62,3 +62,6 @@ desktop.ini
 # Temporary
 *.tmp
 *.log
+
+.vercel
+.env*

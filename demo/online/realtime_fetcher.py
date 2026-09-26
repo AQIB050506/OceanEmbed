@@ -28,8 +28,9 @@ TEMPORAL_WINDOW = 5
 SAMPLE_LATS = np.arange(LAT_MIN + 1.5, LAT_MAX, 4.0)   # ~6 points
 SAMPLE_LONS = np.arange(LON_MIN + 2.0, LON_MAX, 5.0)   # ~11 points
 
-# Load training normalization stats once
-_STATS_PATH = PROCESSED_DIR / "normalization_stats.json"
+# Load training normalization stats once (deploy assets preferred over gitignored data/)
+_ASSETS_STATS = Path(__file__).parent / "assets" / "norm_stats.json"
+_STATS_PATH = _ASSETS_STATS if _ASSETS_STATS.exists() else PROCESSED_DIR / "normalization_stats.json"
 with open(_STATS_PATH) as f:
     NORM_STATS = json.load(f)
 

@@ -1,0 +1,17 @@
+# Upload/bundle exclusions for Vercel deploys (local CLI deploy filtering).
+# NOTE: requirements.txt stays for local installs; pyproject.toml wins on Vercel (CLI >= 48.2).
+
+data/
+models/
+demo/online/cache/
+demo/frontend/
+demo/backend/
+tests/
+notebooks/
+docs/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+*.pt
+*.pth
+*.log

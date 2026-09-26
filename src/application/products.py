@@ -5,7 +5,6 @@ Derives decision-relevant signals from reconstructed temperature fields:
 2. Marine heatwave / thermal anomaly detection
 """
 import numpy as np
-import xarray as xr
 from typing import Optional
 import logging
 

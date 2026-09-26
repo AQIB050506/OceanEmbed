@@ -1,0 +1,16 @@
+[project]
+name = "oceanembed-demo"
+version = "1.0.0"
+description = "OceanEmbed online demo - Oceanic reconstruction & nowcast (SIH 2026)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.117",
+    "numpy",
+    "requests",
+    "onnxruntime",
+    "netCDF4",
+    "scipy",
+]
+
+[tool.vercel]
+entrypoint = "demo.online.server:app"
