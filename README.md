@@ -4,6 +4,12 @@
     <strong>3D subsurface ocean temperature reconstruction from surface satellite observations</strong><br>
     North Indian Ocean · 0–450 m · 15 depth levels · 0.25° grid · daily
   </p>
+  <p>
+    <a href="https://oceanembed-pied.vercel.app">
+      <img src="https://img.shields.io/badge/Launch-Live%20Demo%20%E2%86%92-0f172a?style=for-the-badge&logo=vercel&logoColor=white" alt="Launch the live demo">
+    </a>
+  </p>
+  <p><code>https://oceanembed-pied.vercel.app</code></p>
 </div>
 
 <p align="center">
